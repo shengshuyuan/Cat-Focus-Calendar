@@ -22,9 +22,13 @@ CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 CONFIG_LV_COLOR_DEPTH_16=y
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_20=y
-# LVGL 内置 malloc 池大小(KB)。像素数字由多个小方块组成，页面切换时
-# 还要同时保留 42 个日期标签，因此需要比原 demo 更大的池。
-CONFIG_LV_MEM_SIZE_KILOBYTES=128
+# 整屏快照:社区发布助手的 FAP_SCREENSHOT_V1 协议用它把当前屏幕
+# 渲染成 RGB565 帧缓冲,经 USB-CDC 回传给发布工具(只读截屏)。
+CONFIG_LV_USE_SNAPSHOT=y
+# LVGL 内存:用系统堆(C 库 malloc)分配,不用内置静态池。
+# 像素 UI 对象较多,但内置 128KB 池与整屏静态截屏缓冲(150KB)无法同时
+# 塞进无 PSRAM 的 ESP32-C3 DRAM;改走堆分配后静态截屏缓冲可进 BSS。
+CONFIG_LV_USE_CLIB_MALLOC=y
 
 # --- 系统 ---
 CONFIG_FREERTOS_HZ=1000

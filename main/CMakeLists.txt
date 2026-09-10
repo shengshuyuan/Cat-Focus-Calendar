@@ -11,6 +11,7 @@ idf_component_register(
          "assets/folotoy_pomodoro_scene_focus.c"
          "assets/folotoy_calendar_mountain.c"
          "assets/folotoy_calendar_cat.c"
+         "fap_screenshot.c"
     INCLUDE_DIRS "."
-    REQUIRES bsp esp_timer nvs_flash esp_event esp_netif esp_wifi bt wifi_provisioning
+    REQUIRES bsp driver esp_timer nvs_flash esp_event esp_netif esp_wifi bt wifi_provisioning
 )

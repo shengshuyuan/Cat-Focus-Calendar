@@ -22,6 +22,9 @@ and a cat-focused timer.
   focus interval and rests at other times.
 - **Wi-Fi setup** — BLE provisioning and NTP time sync, entered only when the
   user requests it. No home-network credential is stored in the source tree.
+- **Idle display** — after ten minutes without a button event, the backlight is
+  set to zero while the current page and timer state remain in memory. The first
+  `CLICK` or `LONG` event wakes the display only; press again to operate the UI.
 
 ## Page previews
 
@@ -63,9 +66,11 @@ for build, provisioning, and device-validation details.
 
 ## Validation status
 
-The checked-in firmware passes static checks, host model tests, and a clean
-ESP-IDF firmware build. Visual appearance, physical button feel, and phone
-provisioning still require validation on the actual device.
+The calendar and Pomodoro host models passed in the last verified firmware
+snapshot. The newer idle-backlight update still needs an ESP-IDF build and
+physical-device validation; this machine currently lacks the ESP-IDF 5.5 Python
+virtual environment. Visual appearance, button feel, and phone provisioning also
+remain device-acceptance work.
 
 ## License
 

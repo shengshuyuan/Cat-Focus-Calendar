@@ -65,6 +65,17 @@
 - **Fix**: `tools/validate.sh --firmware` checks `cardid@0x356000` and the merged image. Daily development uses incremental `idf.py flash`; `idf.py erase-flash` is prohibited.
 - **Validation**: The current application is about 1.66 MB, below the 3 MB factory limit; protected-layout and merged-image checks pass.
 
+### 2026-09-10 — Full-frame serial capture exceeded the current RAM budget
+
+- **Symptom**: A full 240 × 320 RGB565 screen capture cannot run alongside Wi-Fi on the current application build, so there is no serial-produced hardware screenshot for the refreshed screens.
+- **Reproduction**: `FAP_SCREENSHOT_V1` needs a 240 × 320 × 2-byte frame buffer (153,600 bytes) in addition to LVGL, Wi-Fi/BLE, audio, and application allocations.
+- **Evidence**: `main/fap_screenshot.c` deliberately keeps the protocol disabled, while `sdkconfig.defaults` documents the snapshot-oriented LVGL allocation configuration. Repository page images are explicitly labelled as rendered previews.
+- **Root cause**: The ESP32-C3 has no PSRAM, and the large contiguous frame buffer does not fit safely with the interactive Wi-Fi application.
+- **Fix**: Keep the serial capture protocol disabled for this build and publish traceable rendered previews from the checked-in layouts and assets. Do not label them as physical-device captures.
+- **Automated verification**: `git diff --check` passes for the implementation and documentation changes.
+- **Physical verification**: Not performed for this revision; real display behavior and idle-backlight wake still need device acceptance.
+- **Remaining risk**: The rendered previews can differ from the physical LCD in paper tone, pixel placement, or controller behavior. A physical photo/capture remains required for visual acceptance.
+
 ## 4. Working loop
 
 1. Work in a `feature/*` branch and start with the board documents and source-of-truth files.

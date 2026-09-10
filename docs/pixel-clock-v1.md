@@ -20,6 +20,7 @@ This branch implements the first visual and interaction slice for the FoloToy AI
 - The static cat, plant, books, mountain, and branch art uses RGB565 assets in Flash. This keeps detailed pixel scenes faithful to the reference without building hundreds of LVGL objects; see [pixel-clock art assets](../assets/images/pixel-clock/README.md).
 - During a running focus interval, the lower Pomodoro scene changes from the sleeping calico cat to the matching awake standing-calico asset. Idle, paused, and break states keep the resting scene.
 - Bottom navigation uses three dark capsule buttons with state-appropriate pixel icons; the four off-design progress squares are removed.
+- After ten minutes without a `CLICK` or `LONG` event, the firmware sets only the display backlight to zero. It preserves the current page and Pomodoro state; the first eligible button event wakes the backlight without navigating, and the next event operates the UI. This is not display-controller sleep or deep sleep.
 
 ## Lunar and solar-term data
 
@@ -33,4 +34,4 @@ This development build uses BLE provisioning security level 0 to validate the ha
 
 ## Device test snapshot
 
-On 2026-09-10 the firmware was built with ESP-IDF v5.5.3 and flashed to an ESP32-C3 over `/dev/cu.usbmodem1101` with `idf.py flash`. The incremental flash erased only the bootloader, partition table, and factory-app ranges; the protected `cardid` partition at `0x356000` was not touched. Physical visual inspection and pressing each key remain the final manual acceptance step for calendar month switching, Chinese daily date navigation, the Pomodoro start/pause flow, and Wi-Fi provisioning.
+On 2026-09-10 the earlier firmware snapshot was built with ESP-IDF v5.5.3 and flashed to an ESP32-C3 over `/dev/cu.usbmodem1101` with `idf.py flash`. The incremental flash erased only the bootloader, partition table, and factory-app ranges; the protected `cardid` partition at `0x356000` was not touched. The newer ten-minute idle-backlight change has not been rebuilt in this environment because the required ESP-IDF Python virtual environment is absent. Physical visual inspection and pressing each key remain the final manual acceptance step for calendar month switching, Chinese daily date navigation, the Pomodoro start/pause flow, Wi-Fi provisioning, idle backlight wake, and protected flash layout.

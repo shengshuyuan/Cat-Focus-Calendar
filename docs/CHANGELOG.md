@@ -6,6 +6,9 @@
 
 ## Unreleased
 
+- Added a ten-minute idle-backlight policy. It sets the backlight to zero without losing the current page or Pomodoro state; the first eligible button event wakes the display and the next one operates the UI.
+- Kept rendered page previews as the repository visual reference because full-frame serial capture is disabled on this no-PSRAM Wi-Fi build.
+
 - Added a Chinese tear-off-style daily page. Long-press `UP` from the calendar to enter it; `UP` and `DOWN` move by one day, and `OK` returns to the calendar. The page uses the existing offline date data and makes its lightweight focus suggestions explicit rather than claiming authoritative traditional almanac data.
 
 - Added an awake standing-calico Pomodoro scene. It replaces the sleeping-cat scene only while a focus interval is running; idle, paused, and break states retain the resting art.
