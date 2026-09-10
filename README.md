@@ -23,6 +23,18 @@ and a cat-focused timer.
 - **Wi-Fi setup** — BLE provisioning and NTP time sync, entered only when the
   user requests it. No home-network credential is stored in the source tree.
 
+## Page previews
+
+The following are rendered previews based on the checked-in firmware layouts
+and pixel assets. They are not photographs or serial captures from a physical
+device; physical display acceptance remains tracked below.
+
+<p align="center">
+  <img src="docs/assets/cat-focus-calendar/publish-3x4/05-overview.png" alt="Rendered calendar and Pomodoro page preview" width="31%" />
+  <img src="docs/assets/cat-focus-calendar/publish-3x4/04-chinese-calendar.png" alt="Rendered Chinese daily page preview" width="31%" />
+  <img src="docs/assets/cat-focus-calendar/publish-3x4/02-focus-standing.png" alt="Rendered active-focus cat scene preview" width="31%" />
+</p>
+
 ## Three-button controls
 
 | From the calendar | Action |
