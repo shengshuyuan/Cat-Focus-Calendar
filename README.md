@@ -33,9 +33,9 @@ and pixel assets. They are not photographs or serial captures from a physical
 device; physical display acceptance remains tracked below.
 
 <p align="center">
-  <img src="docs/assets/cat-focus-calendar/publish-3x4/05-overview.png" alt="Rendered calendar and Pomodoro page preview" width="31%" />
+  <img src="docs/assets/cat-focus-calendar/publish-3x4/01-month-calendar.png" alt="Rendered monthly calendar page preview" width="31%" />
   <img src="docs/assets/cat-focus-calendar/publish-3x4/04-chinese-calendar.png" alt="Rendered Chinese daily page preview" width="31%" />
-  <img src="docs/assets/cat-focus-calendar/publish-3x4/02-focus-standing.png" alt="Rendered active-focus cat scene preview" width="31%" />
+  <img src="docs/assets/cat-focus-calendar/publish-3x4/03-focus-countdown.png" alt="Rendered active Pomodoro countdown page preview" width="31%" />
 </p>
 
 ## Three-button controls

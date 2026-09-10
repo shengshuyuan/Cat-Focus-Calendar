@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Updated the README preview order to show the connected monthly calendar first and the active 24:59 Pomodoro countdown third. Both are source-based renders, not device captures.
+
 - Added a ten-minute idle-backlight policy. It sets the backlight to zero without losing the current page or Pomodoro state; the first eligible button event wakes the display and the next one operates the UI.
 - Kept rendered page previews as the repository visual reference because full-frame serial capture is disabled on this no-PSRAM Wi-Fi build.
 

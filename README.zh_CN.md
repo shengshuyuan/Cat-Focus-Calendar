@@ -19,9 +19,9 @@ Cat Focus Calendar 是运行在 FoloToy AI Passport 240 × 320 屏幕上的像�
 下图根据已入库的固件页面布局和像素资源渲染，用于展示当前页面效果；它们不是实体设备照片或串口截屏。真机屏幕的最终验收仍以本文后面的验证状态为准。
 
 <p align="center">
-  <img src="docs/assets/cat-focus-calendar/publish-3x4/05-overview.png" alt="万年历与番茄钟页面效果图" width="31%" />
+  <img src="docs/assets/cat-focus-calendar/publish-3x4/01-month-calendar.png" alt="月历主页面效果图" width="31%" />
   <img src="docs/assets/cat-focus-calendar/publish-3x4/04-chinese-calendar.png" alt="中国日历页面效果图" width="31%" />
-  <img src="docs/assets/cat-focus-calendar/publish-3x4/02-focus-standing.png" alt="专注进行中站立猫场景效果图" width="31%" />
+  <img src="docs/assets/cat-focus-calendar/publish-3x4/03-focus-countdown.png" alt="专注倒计时页面效果图" width="31%" />
 </p>
 
 ## 三按键操作
