@@ -81,6 +81,8 @@ Unverified: 仍需板卡、仪器或用户确认的事项
 
 ## 7. 相关文档
 
+- 中文 UI / 子集字体陷阱：[coding-conventions.zh_CN.md](engineering/coding-conventions.zh_CN.md)（含 `--no-compress`）
+- 日常只写 factory：[protected-flash-layout.zh_CN.md](engineering/protected-flash-layout.zh_CN.md)
 - 构建与验证命令：[build-and-test.zh_CN.md](engineering/build-and-test.zh_CN.md)
 - 代码约定：[coding-conventions.zh_CN.md](engineering/coding-conventions.zh_CN.md)
 - 硬件指南与验收矩阵：[AI 硬件开发指南](../hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.zh_CN.md)

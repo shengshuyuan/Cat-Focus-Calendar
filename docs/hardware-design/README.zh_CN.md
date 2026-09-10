@@ -18,6 +18,7 @@
 | 文档 | 读者与权威范围 |
 | --- | --- |
 | [AI_HARDWARE_DEVELOPMENT_GUIDE.zh_CN.md](AI_HARDWARE_DEVELOPMENT_GUIDE.zh_CN.md) | BSP 行为、资源所有权、约束、验收与排障参考。 |
+| [FOLOTOY_DEVELOPMENT_NOTES.zh_CN.md](FOLOTOY_DEVELOPMENT_NOTES.zh_CN.md) | FoloToy 专属开发问题、修复证据与实机验收记录。 |
 | [specifications.zh_CN.md](specifications.zh_CN.md) | 对外产品规格。 |
 | `components/bsp/include/bsp_pins.h` | 固件引脚、总线实例、地址、屏参和按键窗口的单一事实来源。 |
 

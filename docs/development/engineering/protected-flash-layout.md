@@ -49,3 +49,19 @@ image for protected `cardid`. A
 raw single-file write from `0x0` is safe only when its byte range ends before
 `cardid`; a merged artifact containing later resource partitions spans the gap
 and must not be raw-flashed to a provisioned device.
+
+## Daily iteration: factory / app-only flash (preferred)
+
+On a provisioned device, flash **only the application image** when validating UI or app changes. Do not rewrite the bootloader, partition table, or `cardid`:
+
+```bash
+. ~/esp/esp-idf-v5.5.3/export.sh
+idf.py build
+python -m esptool --chip esp32c3 -p /dev/cu.usbmodem101 -b 460800 \
+  write_flash --flash_mode dio --flash_size 8MB --flash_freq 80m \
+  0x10000 build/FoloToy-AI-Passport.bin
+```
+
+- Adjust the serial port for your machine (`/dev/cu.usbmodem*` is common on macOS).
+- This writes the app at `0x10000` and stays clear of `cardid@0x356000`.
+- Require an explicit flash OK from the user; default to software changes plus `./tools/validate.sh --static` and `idf.py build` first.

@@ -6,6 +6,12 @@
 
 ## Unreleased
 
+- Added a Chinese tear-off-style daily page. Long-press `UP` from the calendar to enter it; `UP` and `DOWN` move by one day, and `OK` returns to the calendar. The page uses the existing offline date data and makes its lightweight focus suggestions explicit rather than claiming authoritative traditional almanac data.
+
+- Added an awake standing-calico Pomodoro scene. It replaces the sleeping-cat scene only while a focus interval is running; idle, paused, and break states retain the resting art.
+
+- Reworked the FoloToy AI Passport pixel UI into the two designed first-class screens: calendar and Pomodoro. Static cat, plant, books, mountain, and branch art now uses RGB565 Flash assets while time, lunar data, calendar selection, battery, Wi-Fi, and Pomodoro state remain live; removed the mismatched intermediary lunar-detail page. The 1900–2100 offline lunar/solar-term table, BLE Wi-Fi provisioning, NTP time sync, and NVS Pomodoro persistence remain available.
+
 - Added the supplied 80-byte CW2017 profile for the specified 520 mAh cell, including content/update-flag checks, verified writes, the required restart sequence, and bounded SOC-readiness polling.
 
 - Expanded the environment bootstrap document: added Espressif's Git service mirror (`git.espressif.com.cn`) as the preferred mainland-China route for ESP-IDF v5.5.3 and its submodules, documented submodule long-wait/timeout handling, in-place repair, and the pinned-commit shallow fetch for large submodules such as `esp32-wifi-lib`, warned about stale per-repository Jihulab `insteadOf` residue, and added the official offline release archive as a last-resort fallback (learned from `esp-mosaico/esp-mosaico-vibe`).

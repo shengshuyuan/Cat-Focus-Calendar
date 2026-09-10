@@ -16,6 +16,7 @@ This directory contains product specifications, firmware-visible board facts, re
 | Document | Audience and authority |
 | --- | --- |
 | [AI_HARDWARE_DEVELOPMENT_GUIDE.md](AI_HARDWARE_DEVELOPMENT_GUIDE.md) | Engineering reference for BSP behavior, resource ownership, constraints, validation, and troubleshooting. |
+| [FOLOTOY_DEVELOPMENT_NOTES.md](FOLOTOY_DEVELOPMENT_NOTES.md) | Evidence log for FoloToy-specific development incidents, fixes, and physical-device acceptance. |
 | [specifications.md](specifications.md) | Public product specifications. |
 | `components/bsp/include/bsp_pins.h` | Firmware source of truth for pin assignments, bus instances, addresses, panel parameters, and button windows. |
 

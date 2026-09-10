@@ -43,3 +43,19 @@
 只有单文件的字节范围在 `cardid` 之前结束时，从 `0x0` 直接写入才安全；
 若合并产物包含位于 `cardid` 之后的资源分区，就不得对已写身份的设备做
 单文件直刷。
+
+## 日常迭代：只写 factory（推荐）
+
+已写身份的真机上，验收 UI/业务改动时**只刷应用分区**，不要动 bootloader、分区表或 `cardid`：
+
+```bash
+. ~/esp/esp-idf-v5.5.3/export.sh
+idf.py build
+python -m esptool --chip esp32c3 -p /dev/cu.usbmodem101 -b 460800 \
+  write_flash --flash_mode dio --flash_size 8MB --flash_freq 80m \
+  0x10000 build/FoloToy-AI-Passport.bin
+```
+
+- 串口名以本机为准（常见 `/dev/cu.usbmodem*`）。
+- 写入范围是 `0x10000` 起的 app，远离 `cardid@0x356000`。
+- 刷写前需用户明确确认；默认先改软件 + `./tools/validate.sh --static` + `idf.py build`。

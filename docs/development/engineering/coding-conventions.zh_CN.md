@@ -5,7 +5,13 @@
 # 代码约定（Coding Conventions）
 
 - **语言/风格**：C 用四空格缩进 + K&R 大括号，跟随相邻文件；函数/局部变量 `snake_case`，公开硬件常量 `BSP_*`，文件内状态 `s_` 前缀；BSP API 用 `bsp_` 前缀，demo 入口 `demo_<feature>_<action>`；内部符号优先 `static`。UI 文案用英文，解释性注释可用中文；保留记录硬件寄存器值与内存约束的注释。
-- **中文方框字陷阱**：当前基线只启用 LVGL Montserrat 14 和 20，这些字体不包含 CJK glyph。即使源码和字符串均为 UTF-8，中文也会显示为缺字方框，修改源文件编码不能解决。添加中文 UI 前，必须编译并选用覆盖全部实际字符的 CJK 字体，优先生成 glyph 子集而非引入完整字库；中英文混排时配置合适的 fallback，同时核对 Flash、内部 RAM 占用并在真机逐字验证。
+- **中文方框字 / 空白字陷阱**：当前基线只启用 LVGL Montserrat 14 和 20，这些字体不包含 CJK glyph。即使源码和字符串均为 UTF-8，中文也会显示为缺字方框或整段空白，改源文件编码不能解决。添加中文 UI 前必须：
+  1. 用 `lv_font_conv` 生成覆盖**全部实际 UI 字符**（含状态文案、节气、标点）的子集字体，优先子集而非完整字库；
+  2. **默认加 `--no-compress`**：本仓库 `sdkconfig` 未开启 `CONFIG_LV_USE_FONT_COMPRESSED`。若生成字体的 `bitmap_format = 1`（压缩）而固件未开解压，字形数据在 bin 里、真机上却整段空白——这比方框更难排查；
+  3. 导出符号名与代码一致（本仓库像素钟使用 `folotoy_font`，见 `main/fonts/folotoy_font.c`），并加入 `main/CMakeLists.txt`；
+  4. 构建后用脚本核对 UI 字符串每个 CJK 码点是否落在字体 cmap 内，再真机逐页验收。
+  参考命令（按需改 `--symbols`）：
+  `npx lv_font_conv --font <LXGWWenKai-Medium.ttf> --size 16 --bpp 4 --no-compress --no-kerning --format lvgl --lv-include lvgl.h --range 0x20-0x7e --symbols '<所需汉字>' -o main/fonts/folotoy_font.c`
 - **复用既有组件**：可复用硬件逻辑放 `components/bsp`；菜单/动画/业务交互/验证页面放 `main`。不要另造轮子，遵循既有 BSP API。
 - **主题不是可删组件**：`ui_pixel` 主题体系（天空底色、草地、标题牌、吉祥物、墨色描边面板）属于用户界面的一部分，不是可删除的"不必要组件"。精简组件或直接载入功能界面时，保留该主题，并通过 `ui_pixel_screen_create()` / `ui_pixel_panel_create()` 建屏。
 - **默认右上角电量**：用户界面在没有默认要求的情况下，默认在**右上角显示电量信息**；除非开发者明确指定其它位置或明确不需要。电量读取 `bsp_battery_soc()`（需要时用 `bsp_battery_mv()`），以小型电池图标或百分比呈现在屏幕右上区域；读值为 `-1`（不可用）时优雅降级，不要画一个数字。**位置不能和右上角已有的白云装饰冲突**（`add_cloud`，约 `x≈188, y≈8`）：放在白云旁边或下方的空闲蓝天区，或屏幕最右上边角，不要盖住白云。

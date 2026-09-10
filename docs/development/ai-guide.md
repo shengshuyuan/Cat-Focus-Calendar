@@ -60,4 +60,4 @@ When the developer submits a reusable asset through you — an image, font, audi
 
 The automated gate is not hardware acceptance. Report `Build`, `Host tests`, `Device tests`, and `Unverified` separately. Use the [hardware guide](../hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.md) for the applicable on-device matrix.
 
-Related documents: [build and test](engineering/build-and-test.md), [coding conventions](engineering/coding-conventions.md), [hardware guide](../hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.md), [documentation index](../README.md), and [root `AGENTS.md`](../../AGENTS.md).
+Related documents: [build and test](engineering/build-and-test.md), [coding conventions](engineering/coding-conventions.md) (CJK/`--no-compress`), [protected flash / app-only write](engineering/protected-flash-layout.md), [hardware guide](../hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.md), [documentation index](../README.md), and [root `AGENTS.md`](../../AGENTS.md).

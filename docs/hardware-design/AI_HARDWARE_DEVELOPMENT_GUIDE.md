@@ -109,7 +109,7 @@ Wi-Fi, NimBLE, and sleep use ESP-IDF directly rather than the BSP. `demo_radio.c
 - The vendor porch, power, and gamma sequence in `bsp_display.c` is panel-specific. Do not treat it as a universal ST7789 sequence.
 - `swap_bytes=true` is required because LVGL emits little-endian RGB565 while SPI sends the high byte first.
 
-The LVGL DMA buffer is one `240 × 20` RGB565 buffer, about 9.6 KB; the LVGL internal pool is 24 KB. Do not add large/double buffers without checking internal RAM, the largest contiguous heap block, and I2S DMA.
+The LVGL DMA buffer is one `240 × 20` RGB565 buffer, about 9.6 KB; the current pixel UI uses a 128 KB LVGL internal pool. The pool was increased after the pixel-art screen exhausted the original 24/32 KB pool; do not treat the larger pool as free memory. Do not add large/double buffers without checking internal RAM, the largest contiguous heap block, and I2S DMA.
 
 LVGL is not thread-safe. Timer callbacks in LVGL context may access objects directly. Button callbacks and worker tasks must use `bsp_lvgl_lock()`/`bsp_lvgl_unlock()`. Stop producers before deleting a page and clear static object pointers afterward.
 
@@ -175,7 +175,7 @@ Community firmware contains no device identity payload. See the
 
 The console is USB Serial/JTAG. Do not switch to the UART0 default output without resolving its GPIO21 conflict with the backlight.
 
-Review at least the 24 KB LVGL pool, 9.6 KB LCD DMA buffer, I2S DMA, 96 KB demo recording, radio stacks, task stacks, total free heap, and largest contiguous block when adding assets, TLS/networking, audio buffers, or double buffering.
+Review at least the 128 KB LVGL pool, 9.6 KB LCD DMA buffer, I2S DMA, 96 KB demo recording, radio stacks, task stacks, total free heap, and largest contiguous block when adding assets, TLS/networking, audio buffers, or double buffering.
 
 ## 11. Adding features
 
