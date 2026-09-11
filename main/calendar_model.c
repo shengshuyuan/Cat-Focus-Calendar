@@ -121,6 +121,26 @@ bool calendar_month_term(int year, int month, int *day, uint8_t *index)
     return false;
 }
 
+
+bool calendar_term_on_day(int year, int month, int day, uint8_t *index)
+{
+    if (index) *index = 0;
+    if (!valid_date(year, month, day)) return false;
+    uint32_t target = solar_ordinal(year, month, day);
+    size_t low = 0;
+    size_t high = lunar_term_table_count;
+    while (low < high) {
+        size_t mid = low + (high - low) / 2;
+        if (lunar_term_table[mid].solar_day < target) low = mid + 1;
+        else high = mid;
+    }
+    if (low >= lunar_term_table_count || lunar_term_table[low].solar_day != target) {
+        return false;
+    }
+    if (index) *index = lunar_term_table[low].term_index;
+    return true;
+}
+
 bool calendar_term_on_or_before(int year, int month, int day, uint8_t *index)
 {
     if (index) *index = 0;

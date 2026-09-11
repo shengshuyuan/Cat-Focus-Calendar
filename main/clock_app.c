@@ -580,11 +580,12 @@ static void format_term(char *out, size_t size, int year, int month)
 static void format_term_for_day(char *out, size_t size, int year, int month, int day)
 {
     uint8_t index = 0;
-    if (!calendar_term_on_or_before(year, month, day, &index)) {
-        snprintf(out, size, "节气 待校时");
+    /* 节气只在当天显示；其他天留空。 */
+    if (!calendar_term_on_day(year, month, day, &index)) {
+        if (out && size) out[0] = '\0';
         return;
     }
-    snprintf(out, size, "%s", calendar_solar_term_name(index));
+    snprintf(out, size, "今日%s", calendar_solar_term_name(index));
 }
 
 static void format_weekday(char *out, size_t size, int year, int month, int day)
@@ -758,16 +759,16 @@ static void build_chinese(void)
     lv_obj_set_size(s_cn_weekday, 100, 20);
     lv_obj_set_style_text_align(s_cn_weekday, LV_TEXT_ALIGN_LEFT, 0);
 
-    /* Keep lunar/term below wifi+battery (icons ~x174-235, y8-24). */
+    /* Lunar + term centered in the top band; keep rest of page as-is. */
     s_cn_lunar = text(s_scr, "", &folotoy_font, COLOR_GREEN);
-    lv_obj_set_pos(s_cn_lunar, 100, 30);
-    lv_obj_set_size(s_cn_lunar, 128, 20);
-    lv_obj_set_style_text_align(s_cn_lunar, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(s_cn_lunar, 40, 30);
+    lv_obj_set_size(s_cn_lunar, 160, 20);
+    lv_obj_set_style_text_align(s_cn_lunar, LV_TEXT_ALIGN_CENTER, 0);
 
     s_cn_term = text(s_scr, "", &folotoy_font, COLOR_GREEN);
-    lv_obj_set_pos(s_cn_term, 118, 50);
-    lv_obj_set_size(s_cn_term, 80, 20);
-    lv_obj_set_style_text_align(s_cn_term, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(s_cn_term, 40, 50);
+    lv_obj_set_size(s_cn_term, 160, 20);
+    lv_obj_set_style_text_align(s_cn_term, LV_TEXT_ALIGN_CENTER, 0);
 
     draw_banner(s_scr, 10, 54, 28, 110, "万\n事\n顺\n遂");
     draw_banner(s_scr, 202, 54, 28, 110, "专\n注\n当\n下");
