@@ -1,6 +1,7 @@
 #include "clock_app.h"
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include <time.h>
 
@@ -11,15 +12,29 @@
 #include "lvgl.h"
 #include "pomodoro_model.h"
 #include "pomodoro_store.h"
+#include "pomodoro_chime.h"
 #include "wifi_provision.h"
+#include "clock_time.h"
+
+#include "nvs.h"
+#include "nvs_flash.h"
 
 extern const lv_font_t folotoy_font;
 extern const lv_image_dsc_t folotoy_pomodoro_scene;
 extern const lv_image_dsc_t folotoy_pomodoro_scene_focus;
+extern const lv_image_dsc_t folotoy_pomodoro_scene_forest;
+extern const lv_image_dsc_t folotoy_pomodoro_scene_forest_focus;
+extern const lv_image_dsc_t folotoy_pomodoro_scene_night;
+extern const lv_image_dsc_t folotoy_pomodoro_scene_night_focus;
 extern const lv_image_dsc_t folotoy_calendar_mountain;
 extern const lv_image_dsc_t folotoy_calendar_cat;
 
 #define COLOR_PAPER      0xF5F0E3
+/* Rest: user samples; focus: sampled from each scene top-edge wall. */
+#define COLOR_PAPER_FOREST 0xCCC09C
+#define COLOR_PAPER_FOREST_FOCUS 0xE9EDDC
+#define COLOR_PAPER_NIGHT 0xDDDDC5
+#define COLOR_PAPER_NIGHT_FOCUS 0xD4C8A4
 #define COLOR_INK        0x17263A
 #define COLOR_GREEN      0x506A4D
 #define COLOR_GREEN_DARK 0x304B38
@@ -27,8 +42,14 @@ extern const lv_image_dsc_t folotoy_calendar_cat;
 #define COLOR_RED        0xA13127
 #define COLOR_SHADOW     0xD8CDB6
 #define COLOR_MUTED      0x7C7A70
+#define COLOR_MUTED_NIGHT 0x8A97B0
+#define COLOR_STATUS_NIGHT 0xC5D4A8
 #define COLOR_SUN        0xEFD8A4
 #define COLOR_CLOUD      0xC8C2B4
+#define COLOR_BATTERY_FULL 0x6FBF6A
+/* Full+charging heuristic: Li-ion near 4.2V while on charger. */
+#define BATTERY_FULL_CHARGING_MV 4100
+#define BATTERY_FULL_SOC_MIN 95
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -60,19 +81,29 @@ static bool s_follow_today = true;
 /* Shared selected date for month grid and Chinese tear-off page. */
 static int s_year = 2026;
 static int s_month = 9;
-static int s_day = 9;
+static int s_day = 11;
 
 static lv_obj_t *s_pomo_status;
 static lv_obj_t *s_pomo_round;
 static lv_obj_t *s_pomo_ok_host;
 static lv_obj_t *s_pomo_scene;
+#define POMO_FEATHER_ROWS 14
+static lv_obj_t *s_pomo_feather[POMO_FEATHER_ROWS];
+static lv_obj_t *s_pomo_theme_toast;
 static const lv_image_dsc_t *s_pomo_scene_source;
 static pixel_digit_t s_pomo_digits[5];
+static uint8_t s_pomo_theme; /* 0 cream, 1 forest, 2 night */
+static lv_timer_t *s_pomo_theme_toast_timer;
+
+#define POMO_THEME_COUNT 3
+#define POMO_THEME_NVS_NS "pomo_ui"
+#define POMO_THEME_NVS_KEY "theme"
 static pixel_digit_t s_cal_year_digits[4];
 static pixel_digit_t s_cal_month_digits[2];
 static lv_obj_t *s_cal_month_unit;
 static lv_obj_t *s_cal_lunar;
 static lv_obj_t *s_cal_term;
+static lv_obj_t *s_cal_sync_hint;
 static lv_obj_t *s_cal_marker;
 static lv_obj_t *s_cal_days[42];
 static lv_obj_t *s_wifi_status;
@@ -102,26 +133,115 @@ static const uint8_t DIGITS[10][7] = {
     {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C},
 };
 
-/* Lightweight 宜/忌 lines — not a full almanac; rotate by weekday. */
-static const char *const YI_LINES[] = {
-    "专注 学习 整理",
-    "学习 整理 专注",
-    "整理 专注 学习",
-    "专注 整理 学习",
-    "学习 专注 整理",
-    "整理 学习 专注",
-    "专注 学习 整理",
+/* Lightweight 宜/忌 — not a full almanac. Date-stable pick; weekday/weekend banks. */
+static const char *const YI_WEEKDAY[] = {
+    "专注", "学习", "阅读", "AI编程", "打扫", "整理",
+    "早起", "番茄钟", "复盘", "喝水", "拉伸", "赚钱",
+};
+static const char *const JI_WEEKDAY[] = {
+    "拖延", "熬夜", "晚睡", "内耗", "颓废", "刷视频",
+    "开很多会", "边吃边刷",
+};
+static const char *const YI_WEEKEND[] = {
+    "出门玩", "散步", "晒太阳", "休息", "补觉", "打扫",
+    "做饭", "见朋友", "阅读", "早睡", "收拾房间", "远离电脑",
+};
+static const char *const JI_WEEKEND[] = {
+    "加班", "内耗", "颓废", "刷一天视频", "宅一天",
+    "熬夜", "晚睡", "伤心", "难过",
 };
 
-static const char *const JI_LINES[] = {
-    "拖延 熬夜",
-    "熬夜 拖延",
-    "拖延 熬夜",
-    "熬夜 拖延",
-    "拖延 熬夜",
-    "熬夜 拖延",
-    "拖延 熬夜",
-};
+static uint32_t almanac_mix(uint32_t x)
+{
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    return x ? x : 1u;
+}
+
+static bool ji_alike(const char *a, const char *b)
+{
+    if (!a || !b) return false;
+    const bool a_sleep = strstr(a, "熬夜") || strstr(a, "晚睡");
+    const bool b_sleep = strstr(b, "熬夜") || strstr(b, "晚睡");
+    if (a_sleep && b_sleep) return true;
+    const bool a_video = strstr(a, "刷视频") || strstr(a, "刷一天视频") || strstr(a, "边吃边刷");
+    const bool b_video = strstr(b, "刷视频") || strstr(b, "刷一天视频") || strstr(b, "边吃边刷");
+    return a_video && b_video;
+}
+
+static void format_almanac_line(char *out, size_t out_sz,
+                                const char *const *bank, size_t bank_n,
+                                int want, int year, int month, int day, uint32_t salt,
+                                bool ji_mode)
+{
+    if (!out || out_sz == 0 || !bank || bank_n == 0 || want <= 0) {
+        if (out && out_sz) out[0] = 0;
+        return;
+    }
+    if (want > (int)bank_n) want = (int)bank_n;
+    if (want > 8) want = 8;
+
+    bool used[16] = {0};
+    const char *picked[8] = {0};
+    uint32_t seed = almanac_mix((uint32_t)year * 10000u + (uint32_t)month * 100u +
+                                (uint32_t)day + salt * 131u);
+    int got = 0;
+    for (int attempt = 0; attempt < (int)bank_n * 4 && got < want; attempt++) {
+        seed = almanac_mix(seed + (uint32_t)attempt * 17u);
+        size_t idx = (size_t)(seed % bank_n);
+        if (used[idx]) continue;
+        bool clash = false;
+        if (ji_mode) {
+            for (int j = 0; j < got; j++) {
+                if (ji_alike(picked[j], bank[idx])) { clash = true; break; }
+            }
+        }
+        if (clash) continue;
+        used[idx] = true;
+        picked[got++] = bank[idx];
+    }
+    /* Fill remaining if conflicts skipped too many. */
+    for (size_t i = 0; i < bank_n && got < want; i++) {
+        if (used[i]) continue;
+        used[i] = true;
+        picked[got++] = bank[i];
+    }
+
+    size_t o = 0;
+    out[0] = 0;
+    for (int i = 0; i < got; i++) {
+        const char *s = picked[i];
+        size_t n = strlen(s);
+        if (i > 0) {
+            if (o + 1 >= out_sz) break;
+            out[o++] = ' ';
+        }
+        if (o + n >= out_sz) break;
+        memcpy(out + o, s, n);
+        o += n;
+        out[o] = 0;
+    }
+}
+
+static void format_yi_ji(char *yi, size_t yi_sz, char *ji, size_t ji_sz,
+                         int year, int month, int day)
+{
+    int wd = calendar_weekday_sunday_first(year, month, day);
+    if (wd < 0 || wd > 6) wd = 0;
+    const bool weekend = (wd == 0 || wd == 6);
+    if (weekend) {
+        format_almanac_line(yi, yi_sz, YI_WEEKEND, sizeof(YI_WEEKEND) / sizeof(YI_WEEKEND[0]),
+                            3, year, month, day, 1u, false);
+        format_almanac_line(ji, ji_sz, JI_WEEKEND, sizeof(JI_WEEKEND) / sizeof(JI_WEEKEND[0]),
+                            2, year, month, day, 2u, true);
+    } else {
+        format_almanac_line(yi, yi_sz, YI_WEEKDAY, sizeof(YI_WEEKDAY) / sizeof(YI_WEEKDAY[0]),
+                            3, year, month, day, 1u, false);
+        format_almanac_line(ji, ji_sz, JI_WEEKDAY, sizeof(JI_WEEKDAY) / sizeof(JI_WEEKDAY[0]),
+                            2, year, month, day, 2u, true);
+    }
+}
 
 static lv_obj_t *pixel(lv_obj_t *parent, int x, int y, int w, int h, uint32_t color)
 {
@@ -358,6 +478,14 @@ static void pixel_digit_move(pixel_digit_t *digit, int x, int y)
     }
 }
 
+static void pixel_digit_foreground(pixel_digit_t *digit)
+{
+    for (int i = 0; i < 35; i++) {
+        if (digit->cells[i]) lv_obj_move_foreground(digit->cells[i]);
+    }
+}
+
+
 static void pixel_colon_build(lv_obj_t *parent, pixel_digit_t *digit, int x, int y, int scale)
 {
     pixel_digit_build(parent, digit, x, y, scale);
@@ -368,12 +496,17 @@ static void pixel_colon_build(lv_obj_t *parent, pixel_digit_t *digit, int x, int
 
 static void reset_screen(void)
 {
+    if (s_pomo_theme_toast_timer) {
+        lv_timer_delete(s_pomo_theme_toast_timer);
+        s_pomo_theme_toast_timer = NULL;
+    }
     if (s_scr) {
         lv_obj_delete(s_scr);
         s_scr = NULL;
     }
-    s_pomo_status = s_pomo_round = s_pomo_ok_host = s_pomo_scene = s_cal_month_unit = s_cal_lunar = s_cal_term = s_cal_marker = NULL;
+    s_pomo_status = s_pomo_round = s_pomo_ok_host = s_pomo_scene = s_pomo_theme_toast = s_cal_month_unit = s_cal_lunar = s_cal_term = s_cal_sync_hint = s_cal_marker = NULL;
     s_pomo_scene_source = NULL;
+    for (int i = 0; i < POMO_FEATHER_ROWS; i++) s_pomo_feather[i] = NULL;
     s_wifi_status = s_wifi_name = s_wifi_hint = NULL;
     s_cn_ym = s_cn_weekday = s_cn_lunar = s_cn_term = s_cn_ganzhi = s_cn_yi = s_cn_ji = NULL;
     for (size_t i = 0; i < ARRAY_SIZE(s_battery_fill); i++) s_battery_fill[i] = NULL;
@@ -387,9 +520,32 @@ static void reset_screen(void)
 static void refresh_battery(void)
 {
     if (s_battery_ok) s_battery_soc = bsp_battery_soc();
+    int mv = s_battery_ok ? bsp_battery_mv() : -1;
     int visible = s_battery_soc < 0 ? 0 : (s_battery_soc * 3 + 99) / 100;
+
+    /* No VBUS/CHG pin. CW2017 often sits at 99% for a while; treat >=99 as full.
+     * High cell voltage (~4.1V+) while full ≈ still on charger / just topped off. */
+    bool full = (s_battery_soc >= BATTERY_FULL_SOC_MIN);
+    bool charging_full = full && (mv >= BATTERY_FULL_CHARGING_MV);
+    if (full) visible = 3;
+
+    static int s_last_logged_soc = -2;
+    static int s_last_logged_mv = -2;
+    static bool s_last_logged_green = false;
+    if (s_battery_soc != s_last_logged_soc || mv != s_last_logged_mv ||
+        charging_full != s_last_logged_green) {
+        ESP_LOGI(TAG, "battery soc=%d mv=%d full=%d green=%d ok=%d",
+                 s_battery_soc, mv, (int)full, (int)charging_full, (int)s_battery_ok);
+        s_last_logged_soc = s_battery_soc;
+        s_last_logged_mv = mv;
+        s_last_logged_green = charging_full;
+    }
+
+    /* Full + charging -> green; otherwise ink/black bars. */
+    uint32_t fill = charging_full ? COLOR_BATTERY_FULL : COLOR_INK;
     for (int i = 0; i < 3; i++) {
         if (!s_battery_fill[i]) continue;
+        lv_obj_set_style_bg_color(s_battery_fill[i], lv_color_hex(fill), 0);
         if (i < visible) lv_obj_clear_flag(s_battery_fill[i], LV_OBJ_FLAG_HIDDEN);
         else lv_obj_add_flag(s_battery_fill[i], LV_OBJ_FLAG_HIDDEN);
     }
@@ -523,6 +679,10 @@ static void build_calendar(void)
         s_cal_days[i] = text(s_scr, "", &lv_font_montserrat_14, COLOR_INK);
         lv_obj_set_size(s_cal_days[i], 25, 23);
     }
+    s_cal_sync_hint = text(s_scr, "待校时 长按下键配网", &folotoy_font, COLOR_RUST);
+    lv_obj_set_pos(s_cal_sync_hint, 10, 255);
+    lv_obj_set_size(s_cal_sync_hint, 200, 22);
+    if (!clock_time_needs_sync_hint()) lv_obj_add_flag(s_cal_sync_hint, LV_OBJ_FLAG_HIDDEN);
     bottom_nav(s_scr, NAV_ICON_UP, NAV_ICON_DOWN, NAV_ICON_OK);
     lv_screen_load(s_scr);
     refresh_battery();
@@ -564,6 +724,10 @@ static void refresh_calendar(void)
         lv_obj_move_foreground(s_cal_days[selected_index]);
     } else {
         lv_obj_add_flag(s_cal_marker, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (s_cal_sync_hint) {
+        if (clock_time_needs_sync_hint()) lv_obj_clear_flag(s_cal_sync_hint, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(s_cal_sync_hint, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -620,6 +784,9 @@ static void build_chinese(void)
     pixel(s_scr, 207, 152, 12, 2, COLOR_SUN);
     pixel(s_scr, 210, 154, 6, 2, COLOR_SUN);
     art_image(s_scr, &folotoy_calendar_cat, 158, 175);
+    /* Day digits above mountain/leaves so the number stays readable. */
+    pixel_digit_foreground(&s_cn_day_digits[0]);
+    pixel_digit_foreground(&s_cn_day_digits[1]);
 
     /* ganzhi frame */
     draw_rect_frame(s_scr, 36, 178, 168, 26, COLOR_RED);
@@ -684,10 +851,13 @@ static void refresh_chinese(void)
     }
     lv_label_set_text(s_cn_ganzhi, buf);
 
-    int wd = calendar_weekday_sunday_first(s_year, s_month, s_day);
-    if (wd < 0 || wd > 6) wd = 0;
-    lv_label_set_text(s_cn_yi, YI_LINES[wd]);
-    lv_label_set_text(s_cn_ji, JI_LINES[wd]);
+    {
+        char yi_buf[48];
+        char ji_buf[40];
+        format_yi_ji(yi_buf, sizeof(yi_buf), ji_buf, sizeof(ji_buf), s_year, s_month, s_day);
+        lv_label_set_text(s_cn_yi, yi_buf);
+        lv_label_set_text(s_cn_ji, ji_buf);
+    }
 
     if (s_day < 10) {
         pixel_digit_blank(&s_cn_day_digits[0]);
@@ -700,6 +870,8 @@ static void refresh_chinese(void)
         pixel_digit_set(&s_cn_day_digits[0], s_day / 10, COLOR_RED);
         pixel_digit_set(&s_cn_day_digits[1], s_day % 10, COLOR_RED);
     }
+    pixel_digit_foreground(&s_cn_day_digits[0]);
+    pixel_digit_foreground(&s_cn_day_digits[1]);
 }
 
 static void build_wifi(void)
@@ -720,12 +892,12 @@ static void build_wifi(void)
     lv_obj_set_pos(s_wifi_name, 22, 93); lv_obj_set_size(s_wifi_name, 196, 30);
     s_wifi_status = text(s_scr, wifi_provision_state_text(), &folotoy_font, COLOR_RUST);
     lv_obj_set_pos(s_wifi_status, 22, 130); lv_obj_set_size(s_wifi_status, 196, 25);
-    s_wifi_hint = text(s_scr, "用手机打开 ESP 配网应用", &folotoy_font, COLOR_INK);
-    lv_obj_set_pos(s_wifi_hint, 15, 174); lv_obj_set_size(s_wifi_hint, 210, 25);
-    lv_obj_t *hint2 = text(s_scr, "搜索上面的设备名", &folotoy_font, COLOR_INK);
-    lv_obj_set_pos(hint2, 15, 199); lv_obj_set_size(hint2, 210, 25);
-    lv_obj_t *hint3 = text(s_scr, "选择家里 Wi-Fi 并输入密码", &folotoy_font, COLOR_INK);
-    lv_obj_set_pos(hint3, 15, 229); lv_obj_set_size(hint3, 210, 25);
+    s_wifi_hint = text(s_scr, "手机连接上面的 Wi-Fi", &folotoy_font, COLOR_INK);
+    lv_obj_set_pos(s_wifi_hint, 15, 168); lv_obj_set_size(s_wifi_hint, 210, 22);
+    lv_obj_t *hint2 = text(s_scr, "浏览器访问 192.168.4.1", &folotoy_font, COLOR_INK);
+    lv_obj_set_pos(hint2, 15, 192); lv_obj_set_size(hint2, 210, 22);
+    lv_obj_t *hint3 = text(s_scr, "在网页选择 Wi-Fi 并输入密码", &folotoy_font, COLOR_INK);
+    lv_obj_set_pos(hint3, 15, 216); lv_obj_set_size(hint3, 210, 22);
     bottom_nav(s_scr, NAV_ICON_UP, NAV_ICON_DOTS, NAV_ICON_PLAY);
     lv_obj_t *back = text(s_scr, "OK开始 上键重试 长按OK返回", &folotoy_font, COLOR_MUTED);
     lv_obj_set_pos(back, 28, 258); lv_obj_set_size(back, 184, 20);
@@ -745,15 +917,161 @@ static void refresh_wifi(void)
         } else if (wifi_provision_state() == WIFI_PROVISION_FAILED) {
             lv_label_set_text(s_wifi_hint, "请确认 2.4G Wi-Fi 后按上重试");
         } else {
-            lv_label_set_text(s_wifi_hint, "用手机打开 ESP 配网应用");
+            lv_label_set_text(s_wifi_hint, "手机连接上面的 Wi-Fi");
         }
+    }
+}
+
+
+typedef struct {
+    const char *name;
+    uint32_t paper;       /* idle / rest pose */
+    uint32_t paper_focus; /* focus pose — matches focus art wall */
+    uint32_t digit;
+    uint32_t status;
+    uint32_t status_alert;
+    uint32_t muted;
+    const lv_image_dsc_t *scene_rest;
+    const lv_image_dsc_t *scene_focus;
+} pomo_theme_t;
+
+static const pomo_theme_t *pomo_theme_get(void)
+{
+    static const pomo_theme_t themes[POMO_THEME_COUNT] = {
+        {
+            .name = "奶油猫咪",
+            .paper = COLOR_PAPER,
+            .paper_focus = COLOR_PAPER,
+            .digit = COLOR_INK,
+            .status = COLOR_GREEN_DARK,
+            .status_alert = COLOR_RUST,
+            .muted = COLOR_MUTED,
+            .scene_rest = &folotoy_pomodoro_scene,
+            .scene_focus = &folotoy_pomodoro_scene_focus,
+        },
+        {
+            .name = "森林小屋",
+            .paper = COLOR_PAPER_FOREST,
+            .paper_focus = COLOR_PAPER_FOREST_FOCUS,
+            .digit = COLOR_INK,
+            .status = COLOR_GREEN_DARK,
+            .status_alert = COLOR_RUST,
+            .muted = COLOR_MUTED,
+            .scene_rest = &folotoy_pomodoro_scene_forest,
+            .scene_focus = &folotoy_pomodoro_scene_forest_focus,
+        },
+        {
+            .name = "深夜书桌",
+            /* Rest DDDDC5 (user); focus wall warmer; night mood in window. */
+            .paper = COLOR_PAPER_NIGHT,
+            .paper_focus = COLOR_PAPER_NIGHT_FOCUS,
+            .digit = COLOR_INK,
+            .status = COLOR_GREEN_DARK,
+            .status_alert = COLOR_RUST,
+            .muted = COLOR_MUTED,
+            .scene_rest = &folotoy_pomodoro_scene_night,
+            .scene_focus = &folotoy_pomodoro_scene_night_focus,
+        },
+    };
+    if (s_pomo_theme >= POMO_THEME_COUNT) s_pomo_theme = 0;
+    return &themes[s_pomo_theme];
+}
+
+
+static bool pomo_focus_pose(void)
+{
+    return (s_pomo.state == POMODORO_FOCUS_RUNNING ||
+            s_pomo.state == POMODORO_FOCUS_PAUSED ||
+            s_pomo.state == POMODORO_ABANDON_CONFIRM);
+}
+
+static uint32_t pomo_paper_now(const pomo_theme_t *theme)
+{
+    return pomo_focus_pose() ? theme->paper_focus : theme->paper;
+}
+
+static void pomo_feather_recolor(uint32_t paper)
+{
+    for (int i = 0; i < POMO_FEATHER_ROWS; i++) {
+        if (!s_pomo_feather[i]) continue;
+        lv_obj_set_style_bg_color(s_pomo_feather[i], lv_color_hex(paper), 0);
+    }
+}
+
+static void pomo_feather_build(lv_obj_t *parent, uint32_t paper)
+{
+    /* Soften the hard top seam: paper fades over the top ~14px of the scene. */
+    for (int i = 0; i < POMO_FEATHER_ROWS; i++) {
+        /* Medium ease: kill the hard seam without veiling the window. */
+        int t = POMO_FEATHER_ROWS - i; /* N..1 */
+        /* Between t^2 (light) and the prior heavy curve. */
+        lv_opa_t opa = (lv_opa_t)((LV_OPA_COVER * t * (t + POMO_FEATHER_ROWS)) /
+                                  (POMO_FEATHER_ROWS * POMO_FEATHER_ROWS * 2));
+        s_pomo_feather[i] = pixel(parent, 5, 168 + i, 230, 1, paper);
+        lv_obj_set_style_bg_opa(s_pomo_feather[i], opa, 0);
+    }
+}
+
+
+static void pomo_theme_load(void)
+{
+    nvs_handle_t handle;
+    if (nvs_open(POMO_THEME_NVS_NS, NVS_READONLY, &handle) != ESP_OK) return;
+    uint8_t value = 0;
+    if (nvs_get_u8(handle, POMO_THEME_NVS_KEY, &value) == ESP_OK &&
+        value < POMO_THEME_COUNT) {
+        s_pomo_theme = value;
+    }
+    nvs_close(handle);
+}
+
+static void pomo_theme_save(void)
+{
+    nvs_handle_t handle;
+    if (nvs_open(POMO_THEME_NVS_NS, NVS_READWRITE, &handle) != ESP_OK) return;
+    if (nvs_set_u8(handle, POMO_THEME_NVS_KEY, s_pomo_theme) == ESP_OK) {
+        nvs_commit(handle);
+    }
+    nvs_close(handle);
+}
+
+static void pomo_theme_toast_hide(lv_timer_t *timer)
+{
+    (void)timer;
+    if (s_pomo_theme_toast) lv_obj_add_flag(s_pomo_theme_toast, LV_OBJ_FLAG_HIDDEN);
+    s_pomo_theme_toast_timer = NULL;
+}
+
+static void pomo_theme_toast_show(const char *name)
+{
+    if (!s_pomo_theme_toast) return;
+    const pomo_theme_t *theme = pomo_theme_get();
+    lv_label_set_text(s_pomo_theme_toast, name);
+    /* Re-color each switch — toast object is created once with the old theme color. */
+    lv_obj_set_style_text_color(s_pomo_theme_toast, lv_color_hex(theme->digit), 0);
+    lv_obj_clear_flag(s_pomo_theme_toast, LV_OBJ_FLAG_HIDDEN);
+    if (s_pomo_theme_toast_timer) {
+        lv_timer_delete(s_pomo_theme_toast_timer);
+        s_pomo_theme_toast_timer = NULL;
+    }
+    s_pomo_theme_toast_timer = lv_timer_create(pomo_theme_toast_hide, 1500, NULL);
+    lv_timer_set_repeat_count(s_pomo_theme_toast_timer, 1);
+}
+
+static void pixel_colon_recolor(pixel_digit_t *digit, uint32_t color)
+{
+    for (int i = 0; i < 35; i++) {
+        if (!digit->cells[i]) continue;
+        if (lv_obj_has_flag(digit->cells[i], LV_OBJ_FLAG_HIDDEN)) continue;
+        lv_obj_set_style_bg_color(digit->cells[i], lv_color_hex(color), 0);
     }
 }
 
 static void build_pomodoro(void)
 {
+    const pomo_theme_t *theme = pomo_theme_get();
     s_scr = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(s_scr, lv_color_hex(COLOR_PAPER), 0);
+    lv_obj_set_style_bg_color(s_scr, lv_color_hex(pomo_paper_now(theme)), 0);
     lv_obj_set_style_bg_opa(s_scr, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_scr, 0, 0);
     lv_obj_set_style_pad_all(s_scr, 0, 0);
@@ -763,20 +1081,26 @@ static void build_pomodoro(void)
     pixel(s_scr, 16, 18, 12, 5, COLOR_GREEN);
     pixel(s_scr, 20, 12, 5, 10, COLOR_GREEN);
     pixel(s_scr, 25, 20, 5, 5, COLOR_GREEN);
-    s_pomo_status = text(s_scr, "专注中", &folotoy_font, COLOR_GREEN_DARK);
+    s_pomo_status = text(s_scr, "专注中", &folotoy_font, theme->status);
     lv_obj_set_pos(s_pomo_status, 53, 12); lv_obj_set_size(s_pomo_status, 96, 26);
-    s_pomo_round = text(s_scr, "第 1 / 4 轮", &folotoy_font, COLOR_MUTED);
+    s_pomo_round = text(s_scr, "第 1 / 4 轮", &folotoy_font, theme->muted);
     lv_obj_set_pos(s_pomo_round, 66, 41); lv_obj_set_size(s_pomo_round, 110, 22);
 
-    int x[] = {12, 57, 102, 117, 162};
+    /* Sec tens was 117: overlapped colon dots at 102+2*8=118 → ghost dots on 1–5. */
+    int x[] = {12, 57, 102, 140, 185};
     pixel_digit_build(s_scr, &s_pomo_digits[0], x[0], 89, 8);
     pixel_digit_build(s_scr, &s_pomo_digits[1], x[1], 89, 8);
     pixel_colon_build(s_scr, &s_pomo_digits[2], x[2], 89, 8);
     pixel_digit_build(s_scr, &s_pomo_digits[3], x[3], 89, 8);
     pixel_digit_build(s_scr, &s_pomo_digits[4], x[4], 89, 8);
 
-    s_pomo_scene_source = &folotoy_pomodoro_scene;
+    s_pomo_scene_source = theme->scene_rest;
     s_pomo_scene = art_image(s_scr, s_pomo_scene_source, 5, 168);
+    pomo_feather_build(s_scr, pomo_paper_now(theme));
+    s_pomo_theme_toast = text(s_scr, theme->name, &folotoy_font, theme->digit);
+    lv_obj_set_pos(s_pomo_theme_toast, 40, 145);
+    lv_obj_set_size(s_pomo_theme_toast, 160, 26);
+    lv_obj_add_flag(s_pomo_theme_toast, LV_OBJ_FLAG_HIDDEN);
     s_pomo_ok_host = bottom_nav(s_scr, NAV_ICON_UP, NAV_ICON_DOWN, NAV_ICON_PLAY);
     lv_screen_load(s_scr);
     refresh_battery();
@@ -798,16 +1122,21 @@ static uint32_t displayed_seconds(void)
 static void refresh_pomodoro(void)
 {
     if (!s_pomo_status) return;
+    const pomo_theme_t *theme = pomo_theme_get();
+    uint32_t paper = pomo_paper_now(theme);
+    if (s_scr) lv_obj_set_style_bg_color(s_scr, lv_color_hex(paper), 0);
+    pomo_feather_recolor(paper);
     uint32_t seconds = displayed_seconds();
     int values[] = {(int)((seconds / 600) % 10), (int)((seconds / 60) % 10), 0,
                     (int)((seconds / 10) % 6), (int)(seconds % 10)};
-    pixel_digit_set(&s_pomo_digits[0], values[0], COLOR_INK);
-    pixel_digit_set(&s_pomo_digits[1], values[1], COLOR_INK);
-    pixel_digit_set(&s_pomo_digits[3], values[3], COLOR_INK);
-    pixel_digit_set(&s_pomo_digits[4], values[4], COLOR_INK);
+    pixel_digit_set(&s_pomo_digits[0], values[0], theme->digit);
+    pixel_digit_set(&s_pomo_digits[1], values[1], theme->digit);
+    pixel_digit_set(&s_pomo_digits[3], values[3], theme->digit);
+    pixel_digit_set(&s_pomo_digits[4], values[4], theme->digit);
+    pixel_colon_recolor(&s_pomo_digits[2], theme->digit);
 
     const char *status = "准备中";
-    uint32_t status_color = COLOR_GREEN_DARK;
+    uint32_t status_color = theme->status;
     nav_icon_t ok_icon = NAV_ICON_PLAY;
 
     switch (s_pomo.state) {
@@ -823,7 +1152,7 @@ static void refresh_pomodoro(void)
         case POMODORO_ABANDON_CONFIRM:
             status = "已暂停";
             ok_icon = NAV_ICON_PLAY;
-            status_color = COLOR_RUST;
+            status_color = theme->status_alert;
             break;
         case POMODORO_BREAK_RUNNING:
             status = "休息中";
@@ -840,7 +1169,7 @@ static void refresh_pomodoro(void)
         case POMODORO_REWARD:
             status = "完成啦";
             ok_icon = NAV_ICON_PLAY;
-            status_color = COLOR_RUST;
+            status_color = theme->status_alert;
             break;
         default:
             status = "专注中";
@@ -851,16 +1180,14 @@ static void refresh_pomodoro(void)
     lv_label_set_text(s_pomo_status, status);
     lv_obj_set_style_text_color(s_pomo_status, lv_color_hex(status_color), 0);
     if (s_pomo_ok_host) paint_nav_icon(s_pomo_ok_host, ok_icon);
-    const bool focus_pose = (s_pomo.state == POMODORO_FOCUS_RUNNING ||
-                             s_pomo.state == POMODORO_FOCUS_PAUSED ||
-                             s_pomo.state == POMODORO_ABANDON_CONFIRM);
-    const lv_image_dsc_t *scene = focus_pose ? &folotoy_pomodoro_scene_focus
-                                             : &folotoy_pomodoro_scene;
+    const bool focus_pose = pomo_focus_pose();
+    const lv_image_dsc_t *scene = focus_pose ? theme->scene_focus : theme->scene_rest;
     if (s_pomo_scene && s_pomo_scene_source != scene) {
         lv_image_set_src(s_pomo_scene, scene);
         s_pomo_scene_source = scene;
     }
     lv_label_set_text_fmt(s_pomo_round, "第 %u / 4 轮", (unsigned)(s_pomo.pomodoro_round + 1));
+    lv_obj_set_style_text_color(s_pomo_round, lv_color_hex(theme->muted), 0);
 }
 
 static uint64_t now_ms(void)
@@ -871,13 +1198,8 @@ static uint64_t now_ms(void)
 static void sync_today_from_clock(void)
 {
     if (!s_follow_today) return;
-    time_t now = time(NULL);
-    struct tm local = {0};
-    localtime_r(&now, &local);
-    if (local.tm_year + 1900 < 2024) return;
-    int year = local.tm_year + 1900;
-    int month = local.tm_mon + 1;
-    int day = local.tm_mday;
+    int year = 0, month = 0, day = 0;
+    if (!clock_time_read_today(&year, &month, &day)) return;
     if (year != s_year || month != s_month || day != s_day) {
         s_year = year;
         s_month = month;
@@ -891,9 +1213,21 @@ static void tick(lv_timer_t *timer)
 {
     (void)timer;
     refresh_battery();
-    sync_today_from_clock();
+    if (clock_time_take_sync_event()) {
+        s_follow_today = true;
+        sync_today_from_clock();
+        if (s_page == PAGE_CALENDAR) refresh_calendar();
+        else if (s_page == PAGE_CHINESE) refresh_chinese();
+    } else {
+        sync_today_from_clock();
+    }
     pomodoro_event_t event = pomodoro_model_tick(&s_pomo, now_ms());
     if (event != POMODORO_EVENT_NONE) pomodoro_store_request_save(&s_pomo);
+    if (event == POMODORO_EVENT_FOCUS_COMPLETE ||
+        event == POMODORO_EVENT_BREAK_COMPLETE) {
+        /* Countdown finished: soft ES8311 ding-dong (honors muted). */
+        pomodoro_chime_notify(s_pomo.muted);
+    }
     if (s_page == PAGE_POMODORO) {
         refresh_pomodoro();
     } else if (s_page == PAGE_WIFI) {
@@ -906,10 +1240,21 @@ void clock_app_prepare(bool battery_ok)
     if (s_prepared) return;
     s_prepared = true;
     s_battery_ok = battery_ok;
+    clock_time_build_date(&s_year, &s_month, &s_day);
+    clock_time_bootstrap();
+    {
+        int y = 0, m = 0, d = 0;
+        if (clock_time_read_today(&y, &m, &d)) {
+            s_year = y;
+            s_month = m;
+            s_day = d;
+        }
+    }
     pomodoro_model_defaults(&s_pomo);
     if (!pomodoro_store_init(&s_pomo)) {
         ESP_LOGW(TAG, "Pomodoro state store unavailable; using volatile state");
     }
+    pomo_theme_load();
     wifi_provision_prepare();
     wifi_provision_auto_start();
 }
@@ -1014,6 +1359,16 @@ void clock_app_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         if (ev == BSP_BTN_CLICK && btn == BSP_BTN_OK) wifi_provision_start();
         else if (ev == BSP_BTN_CLICK && btn == BSP_BTN_UP && wifi_provision_state() == WIFI_PROVISION_FAILED) wifi_provision_retry();
         refresh_wifi();
+        return;
+    }
+
+    /* Pomodoro theme cycle: long-press UP only. Does not touch countdown/state. */
+    if (s_page == PAGE_POMODORO && ev == BSP_BTN_LONG && btn == BSP_BTN_UP) {
+        s_pomo_theme = (uint8_t)((s_pomo_theme + 1) % POMO_THEME_COUNT);
+        pomo_theme_save();
+        const pomo_theme_t *theme = pomo_theme_get();
+        pomo_theme_toast_show(theme->name);
+        refresh_pomodoro();
         return;
     }
 

@@ -12,6 +12,8 @@ selection, battery level, and Wi-Fi state remain LVGL code.
 | --- | --- | --- | --- |
 | `pomodoro-scene.png` | 230 × 107 RGB | `main/assets/folotoy_pomodoro_scene.c` | Pomodoro lower scene for IDLE / BREAK_* / BREAK_PROMPT / REWARD: plant, lying cat, mug, and books. |
 | `pomodoro-scene-focus.png` | 230 × 107 RGB | `main/assets/folotoy_pomodoro_scene_focus.c` | Pomodoro lower scene for FOCUS_RUNNING / FOCUS_PAUSED / ABANDON_CONFIRM: plant, standing calico, FOCUS books, and mug. |
+| `pomodoro-scene-forest-rest.png` / `pomodoro-scene-forest-focus.png` | 1838 × 855 → 230 × 107 RGB | `folotoy_pomodoro_scene_forest.c` / `_forest_focus.c` | Forest cabin Pomodoro theme (rest sleeping / focus alert). |
+| `pomodoro-scene-night-rest.png` / `pomodoro-scene-night-focus.png` | 1838 × 855 → 230 × 107 RGB | `folotoy_pomodoro_scene_night.c` / `_night_focus.c` | Night desk Pomodoro theme (rest sleeping / focus alert). |
 | `calendar-mountain.png` | 121 × 28 RGB | `main/assets/folotoy_calendar_mountain.c` | Calendar upper-right mountain and branch. |
 | `calendar-cat.png` | 76 × 32 RGB | `main/assets/folotoy_calendar_cat.c` | Calendar lower-right cat and leaves. |
 

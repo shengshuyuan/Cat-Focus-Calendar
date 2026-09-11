@@ -10,6 +10,8 @@
 | --- | --- | --- | --- |
 | `pomodoro-scene.png` | 230 × 107 RGB | `main/assets/folotoy_pomodoro_scene.c` | IDLE / BREAK_* / BREAK_PROMPT / REWARD 等休息或结束后的番茄钟下半部：绿植、趴姿猫、杯子和书。 |
 | `pomodoro-scene-focus.png` | 230 × 107 RGB | `main/assets/folotoy_pomodoro_scene_focus.c` | FOCUS_RUNNING / FOCUS_PAUSED / ABANDON_CONFIRM 专注相关状态的番茄钟下半部：绿植、站立三花猫、FOCUS 书与杯子。 |
+| `pomodoro-scene-forest-rest.png` / `pomodoro-scene-forest-focus.png` | 1838 × 855 → 230 × 107 RGB | `folotoy_pomodoro_scene_forest.c` / `_forest_focus.c` | 森林小屋主题（休息睡姿 / 专注站姿）。 |
+| `pomodoro-scene-night-rest.png` / `pomodoro-scene-night-focus.png` | 1838 × 855 → 230 × 107 RGB | `folotoy_pomodoro_scene_night.c` / `_night_focus.c` | 深夜书桌主题（休息睡姿 / 专注站姿）。 |
 | `calendar-mountain.png` | 121 × 28 RGB | `main/assets/folotoy_calendar_mountain.c` | 万年历右上角的山景与枝叶。 |
 | `calendar-cat.png` | 76 × 32 RGB | `main/assets/folotoy_calendar_cat.c` | 万年历右下角的猫和枝叶。 |
 

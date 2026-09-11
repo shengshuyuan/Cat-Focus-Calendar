@@ -5,13 +5,19 @@ idf_component_register(
          "lunar_table.c"
          "pomodoro_model.c"
          "pomodoro_store.c"
+         "pomodoro_chime.c"
+         "clock_time.c"
          "wifi_provision.c"
          "fonts/folotoy_font.c"
          "assets/folotoy_pomodoro_scene.c"
          "assets/folotoy_pomodoro_scene_focus.c"
+         "assets/folotoy_pomodoro_scene_forest.c"
+         "assets/folotoy_pomodoro_scene_forest_focus.c"
+         "assets/folotoy_pomodoro_scene_night.c"
+         "assets/folotoy_pomodoro_scene_night_focus.c"
          "assets/folotoy_calendar_mountain.c"
          "assets/folotoy_calendar_cat.c"
          "fap_screenshot.c"
     INCLUDE_DIRS "."
-    REQUIRES bsp driver esp_timer nvs_flash esp_event esp_netif esp_wifi bt wifi_provisioning
+    REQUIRES bsp driver esp_timer nvs_flash esp_event esp_netif esp_wifi esp_http_server esp_http_client
 )
