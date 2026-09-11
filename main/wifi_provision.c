@@ -1,6 +1,7 @@
 #include "wifi_provision.h"
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -24,7 +25,7 @@ static const char *TAG = "wifi_provision";
 
 #define SCAN_MAX 20
 #define FORM_MAX 192
-#define HTML_MAX 6144
+#define DYN_BUF 512
 
 typedef struct {
     char ssid[33];
@@ -413,153 +414,222 @@ static bool request_scan_async(void)
     return true;
 }
 
+/* Fixed portal chrome lives in .rodata (Flash). Dynamic rows use DYN_BUF only. */
+static const char PORTAL_HEAD[] =
+    "<!doctype html><html><head><meta charset=utf-8>"
+    "<meta name=viewport content=\"width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover\">"
+    "<title>配网</title><style>"
+    "*{box-sizing:border-box}"
+    "body{margin:0;background:#f5f0e3;color:#17263a;font-family:-apple-system,BlinkMacSystemFont,sans-serif;"
+    "-webkit-text-size-adjust:100%}"
+    ".wrap{max-width:520px;margin:0 auto;padding:16px 16px 28px}"
+    ".card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.08)}"
+    "h1{font-size:18px;margin:0 0 4px}"
+    ".sub{color:#7c7a70;font-size:13px;margin:0 0 14px;line-height:1.4}"
+    ".row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}"
+    ".row h2{font-size:15px;margin:0}"
+    ".link{color:#304b38;font-size:14px;text-decoration:none;white-space:nowrap;border:0;background:0;padding:0;font:inherit;cursor:pointer}"
+    ".list{border:1px solid #e6decc;border-radius:10px;max-height:min(36vh,240px);overflow:auto;-webkit-overflow-scrolling:touch;margin:0 0 12px}"
+    ".list.hide{display:none}"
+    ".item{display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid #f0e9db}"
+    ".item:last-child{border-bottom:0}.meta{flex:1;min-width:0}"
+    ".ssid{font-size:15px;line-height:1.3;word-break:break-all}"
+    ".sig{color:#7c7a70;font-size:12px;margin-top:2px}"
+    ".waves{display:flex;align-items:flex-end;gap:2px;height:16px;flex-shrink:0}"
+    ".waves b{display:block;width:3px;background:#d2c9b5;border-radius:1px}"
+    ".waves b:nth-child(1){height:4px}.waves b:nth-child(2){height:8px}"
+    ".waves b:nth-child(3){height:12px}.waves b:nth-child(4){height:16px}"
+    ".waves.l4 b,.waves.l3 b:nth-child(-n+3),.waves.l2 b:nth-child(-n+2),"
+    ".waves.l1 b:nth-child(1){background:#304b38}"
+    ".picked{display:none;align-items:center;justify-content:space-between;gap:8px;"
+    "border:1px solid #e6decc;border-radius:10px;padding:12px;margin:0 0 12px;background:#faf7f0}"
+    ".picked.on{display:flex}.picked .n{font-size:15px;font-weight:600;word-break:break-all}"
+    "label.field{display:block;font-size:13px;color:#506a4d;margin:10px 0 4px}"
+    ".pwrow{display:flex;gap:8px;align-items:stretch}"
+    ".pwrow input{flex:1;min-width:0}"
+    ".toggle{flex-shrink:0;padding:0 12px;border:1px solid #d8cdb6;border-radius:10px;"
+    "background:#faf7f0;color:#304b38;font-size:13px;white-space:nowrap}"
+    "input[type=text],input[type=password]{width:100%;font-size:16px;"
+    "padding:11px 12px;border:1px solid #d8cdb6;border-radius:10px;background:#fff}"
+    "details{margin:10px 0 0}summary{color:#7c7a70;font-size:13px;cursor:pointer}"
+    ".btn{display:block;width:100%;margin-top:14px;padding:13px;border:0;border-radius:12px;"
+    "background:#304b38;color:#fff;font-size:16px}"
+    ".btn:disabled{opacity:.55}"
+    ".tip{color:#7c7a70;font-size:12px;line-height:1.45;margin:12px 0 0}"
+    ".msg{background:#eef5ea;color:#304b38;border-radius:8px;padding:8px 10px;font-size:13px;margin:0 0 12px}"
+    ".scan{text-align:center;padding:18px 8px;color:#506a4d}"
+    "@media (max-height:560px){.list{max-height:min(28vh,180px)}.wrap{padding-bottom:16px}}"
+    "</style></head><body><div class=wrap><div class=card>"
+    "<h1>猫猫专注日历</h1>"
+    "<p class=sub>浏览器访问 <b>192.168.4.1</b><br>仅支持 2.4GHz Wi-Fi</p>";
+
+static const char PORTAL_SCAN[] =
+    "<div class=scan>正在扫描附近网络…</div>"
+    "<a class=link href=/ style=\"display:block;text-align:center;padding:12px\">查看结果</a>"
+    "<meta http-equiv=refresh content=\"2;url=/\">";
+
+static const char PORTAL_PICKED[] =
+    "<div id=picked class=picked>"
+    "<span class=n id=pickedName></span>"
+    "<button type=button class=link id=change>更换</button>"
+    "</div>";
+
+static const char PORTAL_EMPTY[] =
+    "<div id=list class=list><div class=item>"
+    "<div class=meta><div class=ssid>暂无可用网络</div>"
+    "<div class=sig>点右上角刷新，或下方手动输入</div></div></div></div>";
+
+static const char PORTAL_FORM_TAIL[] =
+    "<label class=field for=pw>密码</label>"
+    "<div class=pwrow>"
+    "<input id=pw name=p type=password maxlength=63 "
+    "placeholder=\"选网后在此输入，无密码可留空\" autocomplete=current-password "
+    "enterkeyhint=done>"
+    "<button type=button class=toggle id=eye aria-label=显示密码>显示</button>"
+    "</div>"
+    "<details id=man><summary>列表没有？手动输入名称</summary>"
+    "<label class=field>Wi-Fi 名称</label>"
+    "<input name=t type=text maxlength=32 placeholder=\"2.4G 名称\" id=manSsid>"
+    "</details>"
+    "<button class=btn type=submit id=go>连接</button>"
+    "</form>"
+    "<p class=tip>先点选网络，列表会收起后再输密码。刷新可能短暂掉线，连回热点即可。最多约 20 个。</p>"
+    "<script>"
+    "(function(){"
+    "var L=document.getElementById('list'),P=document.getElementById('picked'),"
+    "N=document.getElementById('pickedName'),C=document.getElementById('change'),"
+    "W=document.getElementById('pw'),M=document.getElementById('man'),"
+    "E=document.getElementById('eye'),F=document.getElementById('f'),G=document.getElementById('go');"
+    "function pick(el){"
+    "if(!el)return;"
+    "N.textContent=el.value;"
+    "P.classList.add('on');"
+    "if(L)L.classList.add('hide');"
+    "if(M)M.open=false;"
+    "setTimeout(function(){W&&W.focus()},50);"
+    "}"
+    "function showList(){"
+    "P.classList.remove('on');"
+    "if(L)L.classList.remove('hide');"
+    "var r=document.querySelector('input[name=s]:checked');"
+    "if(r)r.checked=false;"
+    "}"
+    "document.querySelectorAll('input[name=s]').forEach(function(r){"
+    "r.addEventListener('change',function(){pick(r)});"
+    "});"
+    "if(C)C.addEventListener('click',showList);"
+    "if(M)M.addEventListener('toggle',function(){"
+    "if(M.open){showList();var t=document.getElementById('manSsid');t&&t.focus();}"
+    "});"
+    "if(E&&W)E.addEventListener('click',function(){"
+    "var show=W.type==='password';"
+    "W.type=show?'text':'password';"
+    "E.textContent=show?'隐藏':'显示';"
+    "E.setAttribute('aria-label',show?'隐藏密码':'显示密码');"
+    "});"
+    "if(F)F.addEventListener('submit',function(){"
+    "if(G){G.disabled=true;G.textContent='连接中…';}"
+    "});"
+    "})();"
+    "</script>";
+
+static const char PORTAL_FOOT[] = "</div></div></body></html>";
+
+static esp_err_t chunk_send(httpd_req_t *req, const char *s)
+{
+    if (!s || !s[0]) return ESP_OK;
+    return httpd_resp_send_chunk(req, s, strlen(s));
+}
+
+static esp_err_t chunk_printf(httpd_req_t *req, char *buf, size_t buflen, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, buflen, fmt, ap);
+    va_end(ap);
+    if (n < 0) return ESP_FAIL;
+    if ((size_t)n >= buflen) {
+        /* Truncate dynamic fragment only; keep sending a valid C string. */
+        n = (int)buflen - 1;
+        buf[n] = 0;
+    }
+    return httpd_resp_send_chunk(req, buf, (size_t)n);
+}
+
 static esp_err_t send_html(httpd_req_t *req, const char *extra)
 {
-    char *page = malloc(HTML_MAX);
-    if (!page) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "oom");
-        return ESP_FAIL;
-    }
-    size_t used = 0;
-    used += (size_t)snprintf(page + used, HTML_MAX - used,
-        "<!doctype html><html><head><meta charset=utf-8>"
-        "<meta name=viewport content=\"width=device-width,initial-scale=1,maximum-scale=1\">"
-        "<title>配网</title><style>"
-        "body{margin:0;background:#f5f0e3;color:#17263a;font-family:-apple-system,sans-serif}"
-        ".wrap{max-width:420px;margin:0 auto;padding:16px}"
-        ".card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.08)}"
-        "h1{font-size:18px;margin:0 0 4px}"
-        ".sub{color:#7c7a70;font-size:13px;margin:0 0 14px;line-height:1.4}"
-        ".row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}"
-        ".row h2{font-size:15px;margin:0}"
-        ".link{color:#304b38;font-size:14px;text-decoration:none;white-space:nowrap;border:0;background:0;padding:0;font:inherit}"
-        ".list{border:1px solid #e6decc;border-radius:10px;max-height:220px;overflow:auto;margin:0 0 12px}"
-        ".list.hide{display:none}"
-        ".item{display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid #f0e9db}"
-        ".item:last-child{border-bottom:0}.meta{flex:1;min-width:0}"
-        ".ssid{font-size:15px;line-height:1.3;word-break:break-all}"
-        ".sig{color:#7c7a70;font-size:12px;margin-top:2px}"
-        ".waves{display:flex;align-items:flex-end;gap:2px;height:16px;flex-shrink:0}"
-        ".waves b{display:block;width:3px;background:#d2c9b5;border-radius:1px}"
-        ".waves b:nth-child(1){height:4px}.waves b:nth-child(2){height:8px}"
-        ".waves b:nth-child(3){height:12px}.waves b:nth-child(4){height:16px}"
-        ".waves.l4 b,.waves.l3 b:nth-child(-n+3),.waves.l2 b:nth-child(-n+2),"
-        ".waves.l1 b:nth-child(1){background:#304b38}"
-        ".picked{display:none;align-items:center;justify-content:space-between;gap:8px;"
-        "border:1px solid #e6decc;border-radius:10px;padding:12px;margin:0 0 12px;background:#faf7f0}"
-        ".picked.on{display:flex}.picked .n{font-size:15px;font-weight:600;word-break:break-all}"
-        "label.field{display:block;font-size:13px;color:#506a4d;margin:10px 0 4px}"
-        "input[type=text],input[type=password]{width:100%%;box-sizing:border-box;font-size:16px;"
-        "padding:11px 12px;border:1px solid #d8cdb6;border-radius:10px;background:#fff}"
-        "details{margin:10px 0 0}summary{color:#7c7a70;font-size:13px}"
-        ".btn{display:block;width:100%%;margin-top:14px;padding:13px;border:0;border-radius:12px;"
-        "background:#304b38;color:#fff;font-size:16px}"
-        ".tip{color:#7c7a70;font-size:12px;line-height:1.45;margin:12px 0 0}"
-        ".msg{background:#eef5ea;color:#304b38;border-radius:8px;padding:8px 10px;font-size:13px;margin:0 0 12px}"
-        ".scan{text-align:center;padding:18px 8px;color:#506a4d}"
-        "</style></head><body><div class=wrap><div class=card>"
-        "<h1>猫猫专注日历</h1>"
-        "<p class=sub>浏览器访问 <b>192.168.4.1</b><br>仅支持 2.4GHz Wi-Fi</p>");
+    char dyn[DYN_BUF];
+    esp_err_t err;
+
+    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+
+    err = chunk_send(req, PORTAL_HEAD);
+    if (err != ESP_OK) goto fail;
 
     if (extra && extra[0]) {
-        used += (size_t)snprintf(page + used, HTML_MAX - used,
-                                 "<div class=msg>%s</div>", extra);
+        err = chunk_printf(req, dyn, sizeof(dyn), "<div class=msg>%s</div>", extra);
+        if (err != ESP_OK) goto fail;
     }
 
     if (s_scan_busy) {
-        used += (size_t)snprintf(page + used, HTML_MAX - used,
-            "<div class=scan>正在扫描附近网络…</div>"
-            "<a class=link href=/ style=\"display:block;text-align:center;padding:12px\">查看结果</a>"
-            "<meta http-equiv=refresh content=\"2;url=/\">");
+        err = chunk_send(req, PORTAL_SCAN);
+        if (err != ESP_OK) goto fail;
     } else {
-        used += (size_t)snprintf(page + used, HTML_MAX - used,
-            "<form method=POST action=/save id=f>"
-            "<div class=row>"
-            "<h2>选择网络 · %d</h2>"
-            "<a class=link href=/rescan>刷新</a>"
-            "</div>", s_scan_count);
+        err = chunk_printf(req, dyn, sizeof(dyn),
+                           "<form method=POST action=/save id=f>"
+                           "<div class=row>"
+                           "<h2>选择网络 · %d</h2>"
+                           "<a class=link href=/rescan>刷新</a>"
+                           "</div>", s_scan_count);
+        if (err != ESP_OK) goto fail;
 
-        used += (size_t)snprintf(page + used, HTML_MAX - used,
-            "<div id=picked class=picked>"
-            "<span class=n id=pickedName></span>"
-            "<button type=button class=link id=change>更换</button>"
-            "</div>");
+        err = chunk_send(req, PORTAL_PICKED);
+        if (err != ESP_OK) goto fail;
 
         if (s_scan_count <= 0) {
-            used += (size_t)snprintf(page + used, HTML_MAX - used,
-                "<div id=list class=list><div class=item>"
-                "<div class=meta><div class=ssid>暂无可用网络</div>"
-                "<div class=sig>点右上角刷新，或下方手动输入</div></div></div></div>");
+            err = chunk_send(req, PORTAL_EMPTY);
+            if (err != ESP_OK) goto fail;
         } else {
-            used += (size_t)snprintf(page + used, HTML_MAX - used, "<div id=list class=list>");
-            for (int i = 0; i < s_scan_count && used + 200 < HTML_MAX; i++) {
+            err = chunk_send(req, "<div id=list class=list>");
+            if (err != ESP_OK) goto fail;
+            for (int i = 0; i < s_scan_count; i++) {
                 char esc[96];
                 html_escape_ssid(esc, sizeof(esc), s_scan_items[i].ssid);
                 int lvl = s_scan_items[i].rssi > -55 ? 4 :
                           s_scan_items[i].rssi > -70 ? 3 :
                           s_scan_items[i].rssi > -80 ? 2 : 1;
-                used += (size_t)snprintf(page + used, HTML_MAX - used,
+                err = chunk_printf(req, dyn, sizeof(dyn),
                     "<label class=item>"
                     "<input type=radio name=s value=\"%s\">"
                     "<div class=meta><div class=ssid>%s</div></div>"
                     "<span class=\"waves l%d\" aria-hidden=true>"
                     "<b></b><b></b><b></b><b></b></span></label>",
                     esc, esc, lvl);
+                if (err != ESP_OK) goto fail;
             }
-            used += (size_t)snprintf(page + used, HTML_MAX - used, "</div>");
+            err = chunk_send(req, "</div>");
+            if (err != ESP_OK) goto fail;
         }
 
-        used += (size_t)snprintf(page + used, HTML_MAX - used,
-            "<label class=field for=pw>密码</label>"
-            "<input id=pw name=p type=password maxlength=63 "
-            "placeholder=\"选网后在此输入，无密码可留空\" autocomplete=current-password "
-            "enterkeyhint=done>"
-            "<details id=man><summary>列表没有？手动输入名称</summary>"
-            "<label class=field>Wi-Fi 名称</label>"
-            "<input name=t type=text maxlength=32 placeholder=\"2.4G 名称\" id=manSsid>"
-            "</details>"
-            "<button class=btn type=submit>连接</button>"
-            "</form>"
-            "<p class=tip>先点选网络，列表会收起后再输密码。刷新可能短暂掉线，连回热点即可。最多约 20 个。</p>"
-            "<script>"
-            "(function(){"
-            "var L=document.getElementById('list'),P=document.getElementById('picked'),"
-            "N=document.getElementById('pickedName'),C=document.getElementById('change'),"
-            "W=document.getElementById('pw'),M=document.getElementById('man');"
-            "function pick(el){"
-            "if(!el)return;"
-            "N.textContent=el.value;"
-            "P.classList.add('on');"
-            "if(L)L.classList.add('hide');"
-            "if(M)M.open=false;"
-            "setTimeout(function(){W&&W.focus()},50);"
-            "}"
-            "function showList(){"
-            "P.classList.remove('on');"
-            "if(L)L.classList.remove('hide');"
-            "var r=document.querySelector('input[name=s]:checked');"
-            "if(r)r.checked=false;"
-            "}"
-            "document.querySelectorAll('input[name=s]').forEach(function(r){"
-            "r.addEventListener('change',function(){pick(r)});"
-            "});"
-            "if(C)C.addEventListener('click',showList);"
-            "if(M)M.addEventListener('toggle',function(){"
-            "if(M.open){showList();var t=document.getElementById('manSsid');t&&t.focus();}"
-            "});"
-            "})();"
-            "</script>");
+        err = chunk_send(req, PORTAL_FORM_TAIL);
+        if (err != ESP_OK) goto fail;
     }
 
-    used += (size_t)snprintf(page + used, HTML_MAX - used, "</div></div></body></html>");
-    if (used >= HTML_MAX - 1) {
-        ESP_LOGW(TAG, "portal html truncated used=%u", (unsigned)used);
-    }
-    httpd_resp_set_type(req, "text/html; charset=utf-8");
-    esp_err_t err = httpd_resp_send(req, page, HTTPD_RESP_USE_STRLEN);
-    free(page);
-    return err;
+    err = chunk_send(req, PORTAL_FOOT);
+    if (err != ESP_OK) goto fail;
+
+    /* Final empty chunk ends the response. */
+    err = httpd_resp_send_chunk(req, NULL, 0);
+    if (err != ESP_OK) goto fail;
+    return ESP_OK;
+
+fail:
+    /* Best-effort abort of chunked response. */
+    httpd_resp_send_chunk(req, NULL, 0);
+    return err == ESP_OK ? ESP_FAIL : err;
 }
+
 
 static esp_err_t root_get(httpd_req_t *req)
 {

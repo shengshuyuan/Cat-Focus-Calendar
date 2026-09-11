@@ -20,6 +20,9 @@
 #include "nvs_flash.h"
 
 extern const lv_font_t folotoy_font;
+extern const lv_font_t folotoy_font_22;
+extern const lv_font_t folotoy_font_13;
+extern const lv_font_t folotoy_font_11;
 extern const lv_image_dsc_t folotoy_pomodoro_scene;
 extern const lv_image_dsc_t folotoy_pomodoro_scene_focus;
 extern const lv_image_dsc_t folotoy_pomodoro_scene_forest;
@@ -30,11 +33,7 @@ extern const lv_image_dsc_t folotoy_calendar_mountain;
 extern const lv_image_dsc_t folotoy_calendar_cat;
 
 #define COLOR_PAPER      0xF5F0E3
-/* Rest: user samples; focus: sampled from each scene top-edge wall. */
-#define COLOR_PAPER_FOREST 0xCCC09C
-#define COLOR_PAPER_FOREST_FOCUS 0xE9EDDC
-#define COLOR_PAPER_NIGHT 0xDDDDC5
-#define COLOR_PAPER_NIGHT_FOCUS 0xD4C8A4
+/* Pomodoro skins use theme.screen_bg (sampled from scene edge), not these. */
 #define COLOR_INK        0x17263A
 #define COLOR_GREEN      0x506A4D
 #define COLOR_GREEN_DARK 0x304B38
@@ -82,13 +81,16 @@ static bool s_follow_today = true;
 static int s_year = 2026;
 static int s_month = 9;
 static int s_day = 11;
+/* Real "today" anchor for month browsing (works even if RTC read fails). */
+static int s_today_year = 2026;
+static int s_today_month = 9;
+static int s_today_day = 11;
+static bool s_today_valid = false;
 
 static lv_obj_t *s_pomo_status;
 static lv_obj_t *s_pomo_round;
 static lv_obj_t *s_pomo_ok_host;
 static lv_obj_t *s_pomo_scene;
-#define POMO_FEATHER_ROWS 14
-static lv_obj_t *s_pomo_feather[POMO_FEATHER_ROWS];
 static lv_obj_t *s_pomo_theme_toast;
 static const lv_image_dsc_t *s_pomo_scene_source;
 static pixel_digit_t s_pomo_digits[5];
@@ -98,14 +100,13 @@ static lv_timer_t *s_pomo_theme_toast_timer;
 #define POMO_THEME_COUNT 3
 #define POMO_THEME_NVS_NS "pomo_ui"
 #define POMO_THEME_NVS_KEY "theme"
-static pixel_digit_t s_cal_year_digits[4];
-static pixel_digit_t s_cal_month_digits[2];
-static lv_obj_t *s_cal_month_unit;
+static lv_obj_t *s_cal_title;
 static lv_obj_t *s_cal_lunar;
 static lv_obj_t *s_cal_term;
 static lv_obj_t *s_cal_sync_hint;
 static lv_obj_t *s_cal_marker;
 static lv_obj_t *s_cal_days[42];
+static lv_obj_t *s_cal_lunars[42];
 static lv_obj_t *s_wifi_status;
 static lv_obj_t *s_wifi_name;
 static lv_obj_t *s_wifi_hint;
@@ -119,6 +120,14 @@ static lv_obj_t *s_cn_term;
 static lv_obj_t *s_cn_ganzhi;
 static lv_obj_t *s_cn_yi;
 static lv_obj_t *s_cn_ji;
+static lv_obj_t *s_cn_mountain;
+static lv_obj_t *s_cn_cat;
+static lv_obj_t *s_cn_banner_right[8];
+static int s_cn_banner_right_n;
+static lv_obj_t *s_cn_ganzhi_layer[12];
+static int s_cn_ganzhi_layer_n;
+static lv_obj_t *s_cn_almanac_layer[16];
+static int s_cn_almanac_layer_n;
 
 static const uint8_t DIGITS[10][7] = {
     {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E},
@@ -147,7 +156,7 @@ static const char *const YI_WEEKEND[] = {
     "做饭", "见朋友", "阅读", "早睡", "收拾房间", "远离电脑",
 };
 static const char *const JI_WEEKEND[] = {
-    "加班", "内耗", "颓废", "刷一天视频", "宅一天",
+    "加班", "内耗", "颓废", "刷视频", "宅一天",
     "熬夜", "晚睡", "伤心", "难过",
 };
 
@@ -215,7 +224,7 @@ static void format_almanac_line(char *out, size_t out_sz,
         size_t n = strlen(s);
         if (i > 0) {
             if (o + 1 >= out_sz) break;
-            out[o++] = ' ';
+            out[o++] = '\n';
         }
         if (o + n >= out_sz) break;
         memcpy(out + o, s, n);
@@ -232,12 +241,12 @@ static void format_yi_ji(char *yi, size_t yi_sz, char *ji, size_t ji_sz,
     const bool weekend = (wd == 0 || wd == 6);
     if (weekend) {
         format_almanac_line(yi, yi_sz, YI_WEEKEND, sizeof(YI_WEEKEND) / sizeof(YI_WEEKEND[0]),
-                            3, year, month, day, 1u, false);
+                            2, year, month, day, 1u, false);
         format_almanac_line(ji, ji_sz, JI_WEEKEND, sizeof(JI_WEEKEND) / sizeof(JI_WEEKEND[0]),
                             2, year, month, day, 2u, true);
     } else {
         format_almanac_line(yi, yi_sz, YI_WEEKDAY, sizeof(YI_WEEKDAY) / sizeof(YI_WEEKDAY[0]),
-                            3, year, month, day, 1u, false);
+                            2, year, month, day, 1u, false);
         format_almanac_line(ji, ji_sz, JI_WEEKDAY, sizeof(JI_WEEKDAY) / sizeof(JI_WEEKDAY[0]),
                             2, year, month, day, 2u, true);
     }
@@ -427,11 +436,12 @@ static void bottom_nav_zh(lv_obj_t *parent, const char *left, const char *mid,
 
 static void calendar_sun(lv_obj_t *parent)
 {
-    pixel(parent, 207, 70, 8, 2, COLOR_SUN);
-    pixel(parent, 203, 72, 16, 3, COLOR_SUN);
-    pixel(parent, 201, 75, 20, 12, COLOR_SUN);
-    pixel(parent, 203, 87, 16, 3, COLOR_SUN);
-    pixel(parent, 207, 90, 8, 2, COLOR_SUN);
+    /* Sit in the header, right of the title / below the battery, above weekdays. */
+    pixel(parent, 196, 30, 8, 2, COLOR_SUN);
+    pixel(parent, 192, 32, 16, 3, COLOR_SUN);
+    pixel(parent, 190, 35, 20, 12, COLOR_SUN);
+    pixel(parent, 192, 47, 16, 3, COLOR_SUN);
+    pixel(parent, 196, 50, 8, 2, COLOR_SUN);
 }
 
 static void pixel_digit_build(lv_obj_t *parent, pixel_digit_t *digit, int x, int y, int scale)
@@ -504,16 +514,20 @@ static void reset_screen(void)
         lv_obj_delete(s_scr);
         s_scr = NULL;
     }
-    s_pomo_status = s_pomo_round = s_pomo_ok_host = s_pomo_scene = s_pomo_theme_toast = s_cal_month_unit = s_cal_lunar = s_cal_term = s_cal_sync_hint = s_cal_marker = NULL;
+    s_pomo_status = s_pomo_round = s_pomo_ok_host = s_pomo_scene = s_pomo_theme_toast = s_cal_title = s_cal_lunar = s_cal_term = s_cal_sync_hint = s_cal_marker = NULL;
     s_pomo_scene_source = NULL;
-    for (int i = 0; i < POMO_FEATHER_ROWS; i++) s_pomo_feather[i] = NULL;
     s_wifi_status = s_wifi_name = s_wifi_hint = NULL;
-    s_cn_ym = s_cn_weekday = s_cn_lunar = s_cn_term = s_cn_ganzhi = s_cn_yi = s_cn_ji = NULL;
+    s_cn_ym = s_cn_weekday = s_cn_lunar = s_cn_term = s_cn_ganzhi = s_cn_yi = s_cn_ji = s_cn_mountain = s_cn_cat = NULL;
+    s_cn_banner_right_n = 0;
+    for (int i = 0; i < 8; i++) s_cn_banner_right[i] = NULL;
+    s_cn_ganzhi_layer_n = 0;
+    for (int i = 0; i < 12; i++) s_cn_ganzhi_layer[i] = NULL;
+    s_cn_almanac_layer_n = 0;
+    for (int i = 0; i < 16; i++) s_cn_almanac_layer[i] = NULL;
     for (size_t i = 0; i < ARRAY_SIZE(s_battery_fill); i++) s_battery_fill[i] = NULL;
     for (size_t i = 0; i < ARRAY_SIZE(s_cal_days); i++) s_cal_days[i] = NULL;
+    for (size_t i = 0; i < ARRAY_SIZE(s_cal_lunars); i++) s_cal_lunars[i] = NULL;
     memset(s_pomo_digits, 0, sizeof(s_pomo_digits));
-    memset(s_cal_year_digits, 0, sizeof(s_cal_year_digits));
-    memset(s_cal_month_digits, 0, sizeof(s_cal_month_digits));
     memset(s_cn_day_digits, 0, sizeof(s_cn_day_digits));
 }
 
@@ -565,17 +579,6 @@ static void format_lunar(char *out, size_t size, int year, int month, int day)
     if (used < size) snprintf(out + used, size - used, "%s", days[lunar.lunar_day]);
 }
 
-static void format_term(char *out, size_t size, int year, int month)
-{
-    int day = 0;
-    uint8_t index = 0;
-    if (!calendar_month_term(year, month, &day, &index)) {
-        snprintf(out, size, "节气 待校时");
-        return;
-    }
-    (void)day;
-    snprintf(out, size, "%s", calendar_solar_term_name(index));
-}
 
 static void format_term_for_day(char *out, size_t size, int year, int month, int day)
 {
@@ -586,6 +589,40 @@ static void format_term_for_day(char *out, size_t size, int year, int month, int
         return;
     }
     snprintf(out, size, "今日%s", calendar_solar_term_name(index));
+}
+
+/* Calendar header row 3: solar term name only (no 今日 prefix). Empty if not today. */
+static void format_term_today_name(char *out, size_t size, int year, int month, int day)
+{
+    uint8_t index = 0;
+    if (!calendar_term_on_day(year, month, day, &index)) {
+        if (out && size) out[0] = '\0';
+        return;
+    }
+    snprintf(out, size, "%s", calendar_solar_term_name(index));
+}
+
+/* Compact lunar caption for month-grid cells. */
+static void format_lunar_cell(char *out, size_t size, int year, int month, int day)
+{
+    static const char *const months[] = {
+        "", "正月", "二月", "三月", "四月", "五月", "六月",
+        "七月", "八月", "九月", "十月", "冬月", "腊月",
+    };
+    static const char *const days[] = {
+        "", "初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十",
+        "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
+        "廿一", "廿二", "廿三", "廿四", "廿五", "廿六", "廿七", "廿八", "廿九", "三十",
+    };
+    calendar_lunar_date_t lunar;
+    if (!out || !size) return;
+    out[0] = '\0';
+    if (!calendar_lunar_lookup(year, month, day, &lunar)) return;
+    if (lunar.lunar_day == 1) {
+        snprintf(out, size, "%s%s", lunar.leap ? "闰" : "", months[lunar.lunar_month]);
+    } else if (lunar.lunar_day >= 1 && lunar.lunar_day <= 30) {
+        snprintf(out, size, "%s", days[lunar.lunar_day]);
+    }
 }
 
 static void format_weekday(char *out, size_t size, int year, int month, int day)
@@ -601,27 +638,34 @@ static void format_weekday(char *out, size_t size, int year, int month, int day)
     snprintf(out, size, "%s", names[wd]);
 }
 
-static void set_calendar_number(pixel_digit_t *digits, int count, int value, uint32_t color)
+
+static void banner_track(lv_obj_t *obj, lv_obj_t **track, int *track_n, int track_cap)
 {
-    int divisor = 1;
-    for (int i = 1; i < count; i++) divisor *= 10;
-    for (int i = 0; i < count; i++) {
-        pixel_digit_set(&digits[i], (value / divisor) % 10, color);
-        divisor /= 10;
-    }
+    if (!obj || !track || !track_n || *track_n >= track_cap) return;
+    track[(*track_n)++] = obj;
 }
 
-static void draw_banner(lv_obj_t *parent, int x, int y, int w, int h, const char *lines)
+static void draw_banner(lv_obj_t *parent, int x, int y, int w, int h, const char *lines,
+                        lv_obj_t **track, int *track_n, int track_cap)
 {
-    pixel(parent, x, y, w, h, COLOR_RED);
-    pixel(parent, x + 2, y + 2, w - 4, h - 4, COLOR_PAPER);
-    pixel(parent, x + 1, y + 1, 3, 3, COLOR_RED);
-    pixel(parent, x + w - 4, y + 1, 3, 3, COLOR_RED);
-    pixel(parent, x + 1, y + h - 4, 3, 3, COLOR_RED);
-    pixel(parent, x + w - 4, y + h - 4, 3, 3, COLOR_RED);
+    lv_obj_t *o;
+    o = pixel(parent, x, y, w, h, COLOR_RED);
+    banner_track(o, track, track_n, track_cap);
+    o = pixel(parent, x + 2, y + 2, w - 4, h - 4, COLOR_PAPER);
+    banner_track(o, track, track_n, track_cap);
+    o = pixel(parent, x + 1, y + 1, 3, 3, COLOR_RED);
+    banner_track(o, track, track_n, track_cap);
+    o = pixel(parent, x + w - 4, y + 1, 3, 3, COLOR_RED);
+    banner_track(o, track, track_n, track_cap);
+    o = pixel(parent, x + 1, y + h - 4, 3, 3, COLOR_RED);
+    banner_track(o, track, track_n, track_cap);
+    o = pixel(parent, x + w - 4, y + h - 4, 3, 3, COLOR_RED);
+    banner_track(o, track, track_n, track_cap);
+    /* Text a bit lower; frame height is chosen by caller to fit 4 glyphs. */
     lv_obj_t *label = text(parent, lines, &folotoy_font, COLOR_RED);
-    lv_obj_set_pos(label, x + 2, y + 8);
-    lv_obj_set_size(label, w - 4, h - 16);
+    lv_obj_set_pos(label, x + 2, y + 12);
+    lv_obj_set_size(label, w - 4, h - 18);
+    banner_track(label, track, track_n, track_cap);
 }
 
 static void draw_rect_frame(lv_obj_t *parent, int x, int y, int w, int h, uint32_t color)
@@ -653,32 +697,40 @@ static void build_calendar(void)
     lv_obj_remove_flag(s_scr, LV_OBJ_FLAG_SCROLLABLE);
     status_icons(s_scr);
 
-    for (int i = 0; i < 4; i++) pixel_digit_build(s_scr, &s_cal_year_digits[i], 13 + i * 21, 12, 4);
-    for (int i = 0; i < 2; i++) pixel_digit_build(s_scr, &s_cal_month_digits[i], 14 + i * 42, 51, 8);
-    s_cal_month_unit = text(s_scr, "月", &folotoy_font, COLOR_INK);
-    lv_obj_set_pos(s_cal_month_unit, 94, 68);
-    lv_obj_set_size(s_cal_month_unit, 28, 25);
+    /* Header: title; lunar + today's solar term on the same line. */
+    s_cal_title = text(s_scr, "", &folotoy_font_22, COLOR_INK);
+    lv_obj_set_style_text_align(s_cal_title, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_pos(s_cal_title, 8, 8);
+    lv_obj_set_size(s_cal_title, 160, 28);
+
     s_cal_lunar = text(s_scr, "", &folotoy_font, COLOR_INK);
-    lv_obj_set_pos(s_cal_lunar, 119, 47); lv_obj_set_size(s_cal_lunar, 108, 24);
-    s_cal_term = text(s_scr, "", &folotoy_font, COLOR_GREEN);
-    lv_obj_set_pos(s_cal_term, 119, 73); lv_obj_set_size(s_cal_term, 108, 22);
-    art_image(s_scr, &folotoy_calendar_mountain, 116, 76);
+    lv_obj_set_style_text_align(s_cal_lunar, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_pos(s_cal_lunar, 8, 38);
+    lv_obj_set_size(s_cal_lunar, 224, 22);
+
+    s_cal_term = NULL; /* term is appended onto s_cal_lunar */
+
+    /* Decoration bottom-right — keep clear of the 3 header text rows. */
     calendar_sun(s_scr);
+    art_image(s_scr, &folotoy_calendar_mountain, 118, 250);
     art_image(s_scr, &folotoy_calendar_cat, 159, 236);
-    lv_obj_move_foreground(s_cal_lunar);
-    lv_obj_move_foreground(s_cal_term);
 
     static const char *WEEKDAYS[] = {"日", "一", "二", "三", "四", "五", "六"};
     for (int i = 0; i < 7; i++) {
         lv_obj_t *label = text(s_scr, WEEKDAYS[i], &folotoy_font,
                                (i == 0 || i == 6) ? COLOR_RUST : COLOR_INK);
-        lv_obj_set_pos(label, 10 + i * 31, 112); lv_obj_set_size(label, 24, 20);
+        lv_obj_set_pos(label, 10 + i * 31, 60);
+        lv_obj_set_size(label, 28, 20);
     }
-    s_cal_marker = pixel(s_scr, 0, 0, 25, 25, COLOR_GREEN);
+
+    /* Marker covers full cell (~31x28). */
+    s_cal_marker = pixel(s_scr, 0, 0, 29, 27, COLOR_GREEN);
     lv_obj_set_style_radius(s_cal_marker, 4, 0);
     for (int i = 0; i < 42; i++) {
         s_cal_days[i] = text(s_scr, "", &lv_font_montserrat_14, COLOR_INK);
-        lv_obj_set_size(s_cal_days[i], 25, 23);
+        lv_obj_set_size(s_cal_days[i], 29, 16);
+        s_cal_lunars[i] = text(s_scr, "", &folotoy_font_11, COLOR_MUTED);
+        lv_obj_set_size(s_cal_lunars[i], 29, 14);
     }
     s_cal_sync_hint = text(s_scr, "待校时 长按下键配网", &folotoy_font, COLOR_RUST);
     lv_obj_set_pos(s_cal_sync_hint, 10, 255);
@@ -691,38 +743,57 @@ static void build_calendar(void)
 
 static void refresh_calendar(void)
 {
-    if (!s_cal_lunar) return;
-    char lunar[40];
-    char term[40];
+    if (!s_cal_lunar || !s_cal_title) return;
+    char title[24];
+    char lunar[48];
+    char term[24];
+    snprintf(title, sizeof(title), "%d年%d月", s_year, s_month);
     format_lunar(lunar, sizeof(lunar), s_year, s_month, s_day);
-    format_term(term, sizeof(term), s_year, s_month);
-    set_calendar_number(s_cal_year_digits, 4, s_year, COLOR_INK);
-    set_calendar_number(s_cal_month_digits, 2, s_month, COLOR_INK);
-    if (s_month < 10) pixel_digit_blank(&s_cal_month_digits[0]);
+    format_term_today_name(term, sizeof(term), s_year, s_month, s_day);
+    if (term[0]) {
+        size_t used = strlen(lunar);
+        if (used + 1 < sizeof(lunar)) snprintf(lunar + used, sizeof(lunar) - used, " %s", term);
+    }
+    lv_label_set_text(s_cal_title, title);
     lv_label_set_text(s_cal_lunar, lunar);
-    lv_label_set_text(s_cal_term, term);
 
     int first = calendar_weekday_sunday_first(s_year, s_month, 1);
     int total = calendar_days_in_month(s_year, s_month);
     int selected_index = first + (s_day - 1);
     for (int i = 0; i < 42; i++) {
         int day = i - first + 1;
+        int x = 10 + (i % 7) * 31;
+        int y = 82 + (i / 7) * 28;
         if (day < 1 || day > total) {
             lv_label_set_text(s_cal_days[i], "");
+            lv_label_set_text(s_cal_lunars[i], "");
+            lv_obj_add_flag(s_cal_days[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(s_cal_lunars[i], LV_OBJ_FLAG_HIDDEN);
             continue;
         }
-        lv_label_set_text_fmt(s_cal_days[i], "%d", day);
+        char cell_lunar[16];
+        format_lunar_cell(cell_lunar, sizeof(cell_lunar), s_year, s_month, day);
         bool selected = day == s_day;
-        lv_obj_set_style_text_color(s_cal_days[i], selected ? lv_color_hex(COLOR_PAPER) :
-            ((i % 7 == 0 || i % 7 == 6) ? lv_color_hex(COLOR_RUST) : lv_color_hex(COLOR_INK)), 0);
-        lv_obj_set_pos(s_cal_days[i], 10 + (i % 7) * 31, 137 + (i / 7) * 23);
+        bool weekend = (i % 7 == 0 || i % 7 == 6);
+        uint32_t day_color = selected ? COLOR_PAPER : (weekend ? COLOR_RUST : COLOR_INK);
+        uint32_t lunar_color = selected ? COLOR_PAPER : COLOR_MUTED;
+        lv_obj_clear_flag(s_cal_days[i], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(s_cal_lunars[i], LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text_fmt(s_cal_days[i], "%d", day);
+        lv_label_set_text(s_cal_lunars[i], cell_lunar);
+        lv_obj_set_style_text_color(s_cal_days[i], lv_color_hex(day_color), 0);
+        lv_obj_set_style_text_color(s_cal_lunars[i], lv_color_hex(lunar_color), 0);
+        lv_obj_set_pos(s_cal_days[i], x, y + 1);
+        lv_obj_set_pos(s_cal_lunars[i], x, y + 15);
     }
     if (s_day >= 1 && s_day <= total) {
         int x = 10 + (selected_index % 7) * 31;
-        int y = 137 + (selected_index / 7) * 23;
-        lv_obj_set_pos(s_cal_marker, x, y - 1);
+        int y = 82 + (selected_index / 7) * 28;
+        lv_obj_set_pos(s_cal_marker, x, y);
         lv_obj_clear_flag(s_cal_marker, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(s_cal_marker);
         lv_obj_move_foreground(s_cal_days[selected_index]);
+        lv_obj_move_foreground(s_cal_lunars[selected_index]);
     } else {
         lv_obj_add_flag(s_cal_marker, LV_OBJ_FLAG_HIDDEN);
     }
@@ -730,6 +801,39 @@ static void refresh_calendar(void)
         if (clock_time_needs_sync_hint()) lv_obj_clear_flag(s_cal_sync_hint, LV_OBJ_FLAG_HIDDEN);
         else lv_obj_add_flag(s_cal_sync_hint, LV_OBJ_FLAG_HIDDEN);
     }
+}
+
+
+static void stack_chinese_layers(void)
+{
+    /* SETTLED layer order (bottom → top) — do not reshuffle casually:
+     * 1) right couplet 专注当下
+     * 2) mountain @ (145,148) + cat @ (158,175) — keep these coords
+     * 3) large day digits
+     * 4) year / weekday / lunar / term
+     * 5) 干支 frame + text
+     * 6) 宜忌 chrome + text
+     * Never lv_obj_move_background() the couplet under the whole screen. */
+    for (int i = 0; i < s_cn_banner_right_n; i++) {
+        if (s_cn_banner_right[i]) lv_obj_move_foreground(s_cn_banner_right[i]);
+    }
+    if (s_cn_mountain) lv_obj_move_foreground(s_cn_mountain);
+    if (s_cn_cat) lv_obj_move_foreground(s_cn_cat);
+    pixel_digit_foreground(&s_cn_day_digits[0]);
+    pixel_digit_foreground(&s_cn_day_digits[1]);
+    if (s_cn_ym) lv_obj_move_foreground(s_cn_ym);
+    if (s_cn_weekday) lv_obj_move_foreground(s_cn_weekday);
+    if (s_cn_lunar) lv_obj_move_foreground(s_cn_lunar);
+    if (s_cn_term) lv_obj_move_foreground(s_cn_term);
+    for (int i = 0; i < s_cn_ganzhi_layer_n; i++) {
+        if (s_cn_ganzhi_layer[i]) lv_obj_move_foreground(s_cn_ganzhi_layer[i]);
+    }
+    if (s_cn_ganzhi) lv_obj_move_foreground(s_cn_ganzhi);
+    for (int i = 0; i < s_cn_almanac_layer_n; i++) {
+        if (s_cn_almanac_layer[i]) lv_obj_move_foreground(s_cn_almanac_layer[i]);
+    }
+    if (s_cn_yi) lv_obj_move_foreground(s_cn_yi);
+    if (s_cn_ji) lv_obj_move_foreground(s_cn_ji);
 }
 
 static void build_chinese(void)
@@ -756,72 +860,87 @@ static void build_chinese(void)
 
     s_cn_weekday = text(s_scr, "", &folotoy_font, COLOR_INK);
     lv_obj_set_pos(s_cn_weekday, 8, 28);
-    lv_obj_set_size(s_cn_weekday, 100, 20);
+    lv_obj_set_size(s_cn_weekday, 62, 20);
     lv_obj_set_style_text_align(s_cn_weekday, LV_TEXT_ALIGN_LEFT, 0);
 
-    /* Lunar + term centered in the top band; keep rest of page as-is. */
+    /* Lunar + term in top band above day digits (digits start ~y72). */
     s_cn_lunar = text(s_scr, "", &folotoy_font, COLOR_GREEN);
-    lv_obj_set_pos(s_cn_lunar, 40, 30);
-    lv_obj_set_size(s_cn_lunar, 160, 20);
+    lv_obj_set_pos(s_cn_lunar, 70, 28);
+    lv_obj_set_size(s_cn_lunar, 130, 20);
     lv_obj_set_style_text_align(s_cn_lunar, LV_TEXT_ALIGN_CENTER, 0);
 
     s_cn_term = text(s_scr, "", &folotoy_font, COLOR_GREEN);
-    lv_obj_set_pos(s_cn_term, 40, 50);
-    lv_obj_set_size(s_cn_term, 160, 20);
+    lv_obj_set_pos(s_cn_term, 70, 46);
+    lv_obj_set_size(s_cn_term, 130, 20);
     lv_obj_set_style_text_align(s_cn_term, LV_TEXT_ALIGN_CENTER, 0);
 
-    draw_banner(s_scr, 10, 54, 28, 110, "万\n事\n顺\n遂");
-    draw_banner(s_scr, 202, 54, 28, 110, "专\n注\n当\n下");
+    draw_banner(s_scr, 10, 54, 28, 90, "万\n事\n顺\n遂", NULL, NULL, 0);
+    s_cn_banner_right_n = 0;
+    draw_banner(s_scr, 202, 54, 28, 90, "专\n注\n当\n下",
+                s_cn_banner_right, &s_cn_banner_right_n, 8);
 
-    /* Large day digits — positioned in refresh for 1 vs 2 digits. */
-    pixel_digit_build(s_scr, &s_cn_day_digits[0], 70, 58, 14);
-    pixel_digit_build(s_scr, &s_cn_day_digits[1], 70, 58, 14);
+    /* Decor at original positions — under digits via z-order, not by shifting down. */
     draw_horse_hint(s_scr, 118, 130);
-
-    art_image(s_scr, &folotoy_calendar_mountain, 145, 148);
+    s_cn_mountain = art_image(s_scr, &folotoy_calendar_mountain, 145, 148);
     pixel(s_scr, 210, 140, 6, 2, COLOR_SUN);
     pixel(s_scr, 207, 142, 12, 2, COLOR_SUN);
     pixel(s_scr, 205, 144, 16, 8, COLOR_SUN);
     pixel(s_scr, 207, 152, 12, 2, COLOR_SUN);
     pixel(s_scr, 210, 154, 6, 2, COLOR_SUN);
-    art_image(s_scr, &folotoy_calendar_cat, 158, 175);
-    /* Day digits above mountain/leaves so the number stays readable. */
+    s_cn_cat = art_image(s_scr, &folotoy_calendar_cat, 158, 175);
+
+    /* Large day digits — below lunar/term band; refresh sets 1 vs 2 x. */
+    pixel_digit_build(s_scr, &s_cn_day_digits[0], 70, 72, 14);
+    pixel_digit_build(s_scr, &s_cn_day_digits[1], 70, 72, 14);
     pixel_digit_foreground(&s_cn_day_digits[0]);
     pixel_digit_foreground(&s_cn_day_digits[1]);
 
-    /* ganzhi frame */
-    draw_rect_frame(s_scr, 36, 178, 168, 26, COLOR_RED);
-    pixel(s_scr, 32, 186, 6, 10, COLOR_RED);
-    pixel(s_scr, 202, 186, 6, 10, COLOR_RED);
+    /* ganzhi frame — tracked so it stays above the cat. */
+    s_cn_ganzhi_layer_n = 0;
+    banner_track(pixel(s_scr, 36, 178, 168, 2, COLOR_RED), s_cn_ganzhi_layer, &s_cn_ganzhi_layer_n, 12);
+    banner_track(pixel(s_scr, 36, 178 + 26 - 2, 168, 2, COLOR_RED), s_cn_ganzhi_layer, &s_cn_ganzhi_layer_n, 12);
+    banner_track(pixel(s_scr, 36, 178, 2, 26, COLOR_RED), s_cn_ganzhi_layer, &s_cn_ganzhi_layer_n, 12);
+    banner_track(pixel(s_scr, 36 + 168 - 2, 178, 2, 26, COLOR_RED), s_cn_ganzhi_layer, &s_cn_ganzhi_layer_n, 12);
+    banner_track(pixel(s_scr, 32, 186, 6, 10, COLOR_RED), s_cn_ganzhi_layer, &s_cn_ganzhi_layer_n, 12);
+    banner_track(pixel(s_scr, 202, 186, 6, 10, COLOR_RED), s_cn_ganzhi_layer, &s_cn_ganzhi_layer_n, 12);
     s_cn_ganzhi = text(s_scr, "", &folotoy_font, COLOR_INK);
     lv_obj_set_pos(s_cn_ganzhi, 40, 180);
     lv_obj_set_size(s_cn_ganzhi, 160, 22);
 
-    /* 宜/忌 frame — lightweight copy, not a full almanac. */
-    draw_rect_frame(s_scr, 12, 212, 216, 52, COLOR_RED);
-    pixel(s_scr, 118, 216, 2, 44, COLOR_RED);
+    /* 宜/忌 frame — tracked above cat as well. */
+    s_cn_almanac_layer_n = 0;
+    banner_track(pixel(s_scr, 12, 212, 216, 2, COLOR_RED), s_cn_almanac_layer, &s_cn_almanac_layer_n, 16);
+    banner_track(pixel(s_scr, 12, 212 + 52 - 2, 216, 2, COLOR_RED), s_cn_almanac_layer, &s_cn_almanac_layer_n, 16);
+    banner_track(pixel(s_scr, 12, 212, 2, 52, COLOR_RED), s_cn_almanac_layer, &s_cn_almanac_layer_n, 16);
+    banner_track(pixel(s_scr, 12 + 216 - 2, 212, 2, 52, COLOR_RED), s_cn_almanac_layer, &s_cn_almanac_layer_n, 16);
+    banner_track(pixel(s_scr, 118, 216, 2, 44, COLOR_RED), s_cn_almanac_layer, &s_cn_almanac_layer_n, 16);
 
-    pixel(s_scr, 20, 222, 22, 22, COLOR_RED);
+    banner_track(pixel(s_scr, 20, 222, 22, 22, COLOR_RED), s_cn_almanac_layer, &s_cn_almanac_layer_n, 16);
     lv_obj_t *yi_mark = text(s_scr, "宜", &folotoy_font, COLOR_PAPER);
     lv_obj_set_pos(yi_mark, 20, 223);
     lv_obj_set_size(yi_mark, 22, 22);
+    banner_track(yi_mark, s_cn_almanac_layer, &s_cn_almanac_layer_n, 16);
 
-    pixel(s_scr, 128, 222, 22, 22, COLOR_GREEN);
+    banner_track(pixel(s_scr, 128, 222, 22, 22, COLOR_GREEN), s_cn_almanac_layer, &s_cn_almanac_layer_n, 16);
     lv_obj_t *ji_mark = text(s_scr, "忌", &folotoy_font, COLOR_PAPER);
     lv_obj_set_pos(ji_mark, 128, 223);
     lv_obj_set_size(ji_mark, 22, 22);
+    banner_track(ji_mark, s_cn_almanac_layer, &s_cn_almanac_layer_n, 16);
 
     s_cn_yi = text(s_scr, "", &folotoy_font, COLOR_INK);
     lv_obj_set_pos(s_cn_yi, 46, 224);
-    lv_obj_set_size(s_cn_yi, 68, 36);
+    lv_obj_set_size(s_cn_yi, 70, 36);
     lv_obj_set_style_text_align(s_cn_yi, LV_TEXT_ALIGN_LEFT, 0);
+    lv_label_set_long_mode(s_cn_yi, LV_LABEL_LONG_CLIP);
 
     s_cn_ji = text(s_scr, "", &folotoy_font, COLOR_INK);
-    lv_obj_set_pos(s_cn_ji, 154, 224);
-    lv_obj_set_size(s_cn_ji, 68, 36);
+    lv_obj_set_pos(s_cn_ji, 152, 224);
+    lv_obj_set_size(s_cn_ji, 70, 36);
     lv_obj_set_style_text_align(s_cn_ji, LV_TEXT_ALIGN_LEFT, 0);
+    lv_label_set_long_mode(s_cn_ji, LV_LABEL_LONG_CLIP);
 
     bottom_nav_zh(s_scr, "前一天", "后一天", "返回");
+    stack_chinese_layers();
     lv_screen_load(s_scr);
     refresh_battery();
 }
@@ -862,17 +981,16 @@ static void refresh_chinese(void)
 
     if (s_day < 10) {
         pixel_digit_blank(&s_cn_day_digits[0]);
-        pixel_digit_move(&s_cn_day_digits[1], 85, 58);
+        pixel_digit_move(&s_cn_day_digits[1], 85, 72);
         pixel_digit_set(&s_cn_day_digits[1], s_day, COLOR_RED);
     } else {
-        pixel_digit_move(&s_cn_day_digits[0], 58, 62);
-        pixel_digit_move(&s_cn_day_digits[1], 118, 62);
-        /* Slightly tighter visual for two digits: keep scale 14 cells. */
+        /* ~6px gap between glyphs (each digit is 5*14 wide). */
+        pixel_digit_move(&s_cn_day_digits[0], 50, 74);
+        pixel_digit_move(&s_cn_day_digits[1], 126, 74);
         pixel_digit_set(&s_cn_day_digits[0], s_day / 10, COLOR_RED);
         pixel_digit_set(&s_cn_day_digits[1], s_day % 10, COLOR_RED);
     }
-    pixel_digit_foreground(&s_cn_day_digits[0]);
-    pixel_digit_foreground(&s_cn_day_digits[1]);
+    stack_chinese_layers();
 }
 
 static void build_wifi(void)
@@ -926,8 +1044,7 @@ static void refresh_wifi(void)
 
 typedef struct {
     const char *name;
-    uint32_t paper;       /* idle / rest pose */
-    uint32_t paper_focus; /* focus pose — matches focus art wall */
+    uint32_t screen_bg; /* rest-frame wall RGB565, expanded; same for focus/rest */
     uint32_t digit;
     uint32_t status;
     uint32_t status_alert;
@@ -941,8 +1058,8 @@ static const pomo_theme_t *pomo_theme_get(void)
     static const pomo_theme_t themes[POMO_THEME_COUNT] = {
         {
             .name = "奶油猫咪",
-            .paper = COLOR_PAPER,
-            .paper_focus = COLOR_PAPER,
+            /* rest-edge RGB565 0xF79C -> LVGL expand */
+            .screen_bg = 0xF7F3E7,
             .digit = COLOR_INK,
             .status = COLOR_GREEN_DARK,
             .status_alert = COLOR_RUST,
@@ -952,8 +1069,8 @@ static const pomo_theme_t *pomo_theme_get(void)
         },
         {
             .name = "森林小屋",
-            .paper = COLOR_PAPER_FOREST,
-            .paper_focus = COLOR_PAPER_FOREST_FOCUS,
+            /* rest-edge RGB565 0xD654 */
+            .screen_bg = 0xD6CBA5,
             .digit = COLOR_INK,
             .status = COLOR_GREEN_DARK,
             .status_alert = COLOR_RUST,
@@ -963,9 +1080,8 @@ static const pomo_theme_t *pomo_theme_get(void)
         },
         {
             .name = "深夜书桌",
-            /* Rest DDDDC5 (user); focus wall warmer; night mood in window. */
-            .paper = COLOR_PAPER_NIGHT,
-            .paper_focus = COLOR_PAPER_NIGHT_FOCUS,
+            /* rest-edge RGB565 0xDF19 */
+            .screen_bg = 0xDEE3CE,
             .digit = COLOR_INK,
             .status = COLOR_GREEN_DARK,
             .status_alert = COLOR_RUST,
@@ -988,29 +1104,8 @@ static bool pomo_focus_pose(void)
 
 static uint32_t pomo_paper_now(const pomo_theme_t *theme)
 {
-    return pomo_focus_pose() ? theme->paper_focus : theme->paper;
-}
-
-static void pomo_feather_recolor(uint32_t paper)
-{
-    for (int i = 0; i < POMO_FEATHER_ROWS; i++) {
-        if (!s_pomo_feather[i]) continue;
-        lv_obj_set_style_bg_color(s_pomo_feather[i], lv_color_hex(paper), 0);
-    }
-}
-
-static void pomo_feather_build(lv_obj_t *parent, uint32_t paper)
-{
-    /* Soften the hard top seam: paper fades over the top ~14px of the scene. */
-    for (int i = 0; i < POMO_FEATHER_ROWS; i++) {
-        /* Medium ease: kill the hard seam without veiling the window. */
-        int t = POMO_FEATHER_ROWS - i; /* N..1 */
-        /* Between t^2 (light) and the prior heavy curve. */
-        lv_opa_t opa = (lv_opa_t)((LV_OPA_COVER * t * (t + POMO_FEATHER_ROWS)) /
-                                  (POMO_FEATHER_ROWS * POMO_FEATHER_ROWS * 2));
-        s_pomo_feather[i] = pixel(parent, 5, 168 + i, 230, 1, paper);
-        lv_obj_set_style_bg_opa(s_pomo_feather[i], opa, 0);
-    }
+    /* Background stays locked to the skin; only scene art follows pose. */
+    return theme->screen_bg;
 }
 
 
@@ -1079,13 +1174,15 @@ static void build_pomodoro(void)
     lv_obj_remove_flag(s_scr, LV_OBJ_FLAG_SCROLLABLE);
     status_icons(s_scr);
 
-    pixel(s_scr, 16, 18, 12, 5, COLOR_GREEN);
-    pixel(s_scr, 20, 12, 5, 10, COLOR_GREEN);
-    pixel(s_scr, 25, 20, 5, 5, COLOR_GREEN);
+    /* Status/round centered; old green tomato-leaf pixels removed (looked like dots). */
     s_pomo_status = text(s_scr, "专注中", &folotoy_font, theme->status);
-    lv_obj_set_pos(s_pomo_status, 53, 12); lv_obj_set_size(s_pomo_status, 96, 26);
+    lv_obj_set_pos(s_pomo_status, 0, 12);
+    lv_obj_set_size(s_pomo_status, 240, 26);
+    lv_obj_set_style_text_align(s_pomo_status, LV_TEXT_ALIGN_CENTER, 0);
     s_pomo_round = text(s_scr, "第 1 / 4 轮", &folotoy_font, theme->muted);
-    lv_obj_set_pos(s_pomo_round, 66, 41); lv_obj_set_size(s_pomo_round, 110, 22);
+    lv_obj_set_pos(s_pomo_round, 0, 41);
+    lv_obj_set_size(s_pomo_round, 240, 22);
+    lv_obj_set_style_text_align(s_pomo_round, LV_TEXT_ALIGN_CENTER, 0);
 
     /* Sec tens was 117: overlapped colon dots at 102+2*8=118 → ghost dots on 1–5. */
     int x[] = {12, 57, 102, 140, 185};
@@ -1097,7 +1194,6 @@ static void build_pomodoro(void)
 
     s_pomo_scene_source = theme->scene_rest;
     s_pomo_scene = art_image(s_scr, s_pomo_scene_source, 5, 168);
-    pomo_feather_build(s_scr, pomo_paper_now(theme));
     s_pomo_theme_toast = text(s_scr, theme->name, &folotoy_font, theme->digit);
     lv_obj_set_pos(s_pomo_theme_toast, 40, 145);
     lv_obj_set_size(s_pomo_theme_toast, 160, 26);
@@ -1126,7 +1222,6 @@ static void refresh_pomodoro(void)
     const pomo_theme_t *theme = pomo_theme_get();
     uint32_t paper = pomo_paper_now(theme);
     if (s_scr) lv_obj_set_style_bg_color(s_scr, lv_color_hex(paper), 0);
-    pomo_feather_recolor(paper);
     uint32_t seconds = displayed_seconds();
     int values[] = {(int)((seconds / 600) % 10), (int)((seconds / 60) % 10), 0,
                     (int)((seconds / 10) % 6), (int)(seconds % 10)};
@@ -1196,11 +1291,29 @@ static uint64_t now_ms(void)
     return (uint64_t)esp_timer_get_time() / 1000ULL;
 }
 
+static void remember_today(int year, int month, int day)
+{
+    if (year < 1900 || month < 1 || month > 12 || day < 1 || day > 31) return;
+    s_today_year = year;
+    s_today_month = month;
+    s_today_day = day;
+    s_today_valid = true;
+}
+
+static void refresh_today_anchor(void)
+{
+    int year = 0, month = 0, day = 0;
+    if (clock_time_read_today(&year, &month, &day)) {
+        remember_today(year, month, day);
+    }
+}
+
 static void sync_today_from_clock(void)
 {
     if (!s_follow_today) return;
     int year = 0, month = 0, day = 0;
     if (!clock_time_read_today(&year, &month, &day)) return;
+    remember_today(year, month, day);
     if (year != s_year || month != s_month || day != s_day) {
         s_year = year;
         s_month = month;
@@ -1251,6 +1364,8 @@ void clock_app_prepare(bool battery_ok)
             s_day = d;
         }
     }
+    remember_today(s_year, s_month, s_day);
+    refresh_today_anchor();
     pomodoro_model_defaults(&s_pomo);
     if (!pomodoro_store_init(&s_pomo)) {
         ESP_LOGW(TAG, "Pomodoro state store unavailable; using volatile state");
@@ -1288,12 +1403,21 @@ void clock_app_back(void)
 static void change_month(int delta)
 {
     s_follow_today = false;
+    refresh_today_anchor();
     s_month += delta;
     if (s_month < 1) { s_month = 12; s_year--; }
     if (s_month > 12) { s_month = 1; s_year++; }
+    /* Other months start at day 1; returning to today's month restores today. */
+    if (s_today_valid && s_year == s_today_year && s_month == s_today_month) {
+        s_day = s_today_day;
+        s_follow_today = true;
+    } else {
+        s_day = 1;
+    }
     int total = calendar_days_in_month(s_year, s_month);
     if (s_day > total) s_day = total;
     if (s_page == PAGE_CALENDAR) refresh_calendar();
+    else if (s_page == PAGE_CHINESE) refresh_chinese();
 }
 
 static void change_day(int delta)

@@ -4,6 +4,8 @@
 
 # Pixel Clock v1
 
+Locked Cat Focus Calendar page, layer, month-browse, and SoftAP rules live in [cat-focus-calendar.md](./cat-focus-calendar.md).
+
 This branch implements the first visual and interaction slice for the FoloToy AI Passport: a paper-toned pixel calendar, a Chinese tear-off-style daily page, and a cat-themed Pomodoro screen at the panel's native 240 × 320 portrait size.
 
 ## Included
@@ -13,7 +15,7 @@ This branch implements the first visual and interaction slice for the FoloToy AI
 - The calendar has an offline lunar-month and 24-solar-term table covering 1900–2100, so its lunar information does not depend on Wi-Fi.
 - Pomodoro starts at 25 minutes. In the idle state, `UP` cycles 15, 25, and 45 minutes; `DOWN` returns to the calendar without pausing an active timer. `OK` starts, pauses, resumes, or starts the prompted break.
 - A long `OK` returns from Pomodoro to the calendar.
-- A long `DOWN` from the calendar opens the Wi-Fi provisioning page. BLE provisioning then supplies the home Wi-Fi credentials and NTP corrects the device clock.
+- A long `DOWN` from the calendar opens the Wi-Fi provisioning page. The device starts a SoftAP portal at `http://192.168.4.1`; the phone joins that hotspot, submits 2.4 GHz credentials, and NTP corrects the device clock.
 - Pomodoro state and completed-session counters use the reference NVS store and recover running work as paused after restart.
 - A small generated LVGL font contains the Chinese glyphs used by these screens. The font source is LXGW WenKai Medium installed locally during development; only the generated C glyph table is tracked.
 - When regenerating, always pass `--no-compress` (this repo leaves `CONFIG_LV_USE_FONT_COMPRESSED` off) and keep the export symbol `folotoy_font`. Missing glyphs or compressed bitmaps without decompress support render Chinese as blank. Extend `--symbols` whenever copy changes, then verify the Wi-Fi page, solar terms, and pomodoro strings on device.
@@ -28,10 +30,8 @@ The development tool uses `lunar-python` v1.4.8 (MIT) to generate a static C tab
 
 ## Wi-Fi setup
 
-The firmware does not contain the user's home SSID or password. From the calendar, long-press `DOWN` to open the Wi-Fi provisioning page, then press `OK`. The screen shows a per-device BLE name such as `FoloToy-12AB34`. On a phone, install Espressif's **ESP BLE Provisioning** app, connect to that name, choose the 2.4 GHz home network, and enter its password in the app. The protocol is described in the [ESP-IDF Wi-Fi Provisioning documentation](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32/api-reference/provisioning/wifi_provisioning.html). ESP-IDF stores the received credentials in its Wi-Fi NVS. After the screen shows a connected state, NTP is requested from `ntp.aliyun.com` and `pool.ntp.org`; long-press `OK` returns to the calendar.
-
-This development build uses BLE provisioning security level 0 to validate the hardware path. A release build should use security level 1 with a unique per-device proof of possession delivered on the device label or QR code.
+The firmware does not contain the user's home SSID or password. From the calendar, long-press `DOWN` to open the Wi-Fi provisioning page. The screen shows the SoftAP name, such as `FoloToy-12AB34`. On a phone, join that 2.4 GHz hotspot and open `http://192.168.4.1`, then choose the home network and enter its password. ESP-IDF stores the received credentials in its Wi-Fi NVS. After the screen shows a connected state, NTP is requested from `ntp.aliyun.com` and `pool.ntp.org`; long-press `OK` returns to the calendar.
 
 ## Device test snapshot
 
-On 2026-09-10 the earlier firmware snapshot was built with ESP-IDF v5.5.3 and flashed to an ESP32-C3 over `/dev/cu.usbmodem1101` with `idf.py flash`. The incremental flash erased only the bootloader, partition table, and factory-app ranges; the protected `cardid` partition at `0x356000` was not touched. The newer ten-minute idle-backlight change has not been rebuilt in this environment because the required ESP-IDF Python virtual environment is absent. Physical visual inspection and pressing each key remain the final manual acceptance step for calendar month switching, Chinese daily date navigation, the Pomodoro start/pause flow, Wi-Fi provisioning, idle backlight wake, and protected flash layout.
+On 2026-09-10 the earlier firmware snapshot was built with ESP-IDF v5.5.3 and flashed to an ESP32-C3 over `/dev/cu.usbmodem1101` with `idf.py flash`. The incremental flash erased only the bootloader, partition table, and factory-app ranges; the protected `cardid` partition at `0x356000` was not touched. Later SoftAP, calendar-grid, and Chinese-page layer changes have not been rebuilt in this environment because the required ESP-IDF Python virtual environment is absent. Physical visual inspection and pressing each key remain the final manual acceptance step for calendar month switching, Chinese daily date navigation, the Pomodoro start/pause flow, SoftAP provisioning, idle backlight wake, and protected flash layout.

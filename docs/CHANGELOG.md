@@ -6,6 +6,9 @@
 
 ## Unreleased
 
+- Replaced BLE Wi-Fi provisioning with a SoftAP web portal at `http://192.168.4.1`. Credentials persist in Flash; NTP still runs after a successful join.
+- Reworked the calendar header and month grid: generated 11/13/22 px fonts, lunar labels in each cell, and a today-anchor so browsing other months lands on day 1 and returning to this month restores today.
+- Locked the Chinese daily-page layer order, top-centered lunar/term copy, and two-line yi/ji suggestions. Pomodoro skins now share one paper color per theme and only swap the cat scene between focus and rest.
 - Updated the README preview order to show the connected monthly calendar first and the active 24:59 Pomodoro countdown third. Both are source-based renders, not device captures.
 
 - Added a ten-minute idle-backlight policy. It sets the backlight to zero without losing the current page or Pomodoro state; the first eligible button event wakes the display and the next one operates the UI.
@@ -15,7 +18,7 @@
 
 - Added an awake standing-calico Pomodoro scene. It replaces the sleeping-cat scene only while a focus interval is running; idle, paused, and break states retain the resting art.
 
-- Reworked the FoloToy AI Passport pixel UI into the two designed first-class screens: calendar and Pomodoro. Static cat, plant, books, mountain, and branch art now uses RGB565 Flash assets while time, lunar data, calendar selection, battery, Wi-Fi, and Pomodoro state remain live; removed the mismatched intermediary lunar-detail page. The 1900–2100 offline lunar/solar-term table, BLE Wi-Fi provisioning, NTP time sync, and NVS Pomodoro persistence remain available.
+- Reworked the FoloToy AI Passport pixel UI into the two designed first-class screens: calendar and Pomodoro. Static cat, plant, books, mountain, and branch art now uses RGB565 Flash assets while time, lunar data, calendar selection, battery, Wi-Fi, and Pomodoro state remain live; removed the mismatched intermediary lunar-detail page. The 1900–2100 offline lunar/solar-term table, SoftAP Wi-Fi provisioning, NTP time sync, and NVS Pomodoro persistence remain available.
 
 - Added the supplied 80-byte CW2017 profile for the specified 520 mAh cell, including content/update-flag checks, verified writes, the required restart sequence, and bounded SOC-readiness polling.
 
