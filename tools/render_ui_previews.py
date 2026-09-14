@@ -28,9 +28,9 @@ TERMS = ["冬至", "小寒", "大寒", "立春", "雨水", "惊蛰", "春分", "
          "谷雨", "立夏", "小满", "芒种", "夏至", "小暑", "大暑", "立秋",
          "处暑", "白露", "秋分", "寒露", "霜降", "立冬", "小雪", "大雪"]
 THEMES = {
-    "cream":  dict(rest="folotoy_pomodoro_scene.c", focus="folotoy_pomodoro_scene_focus.c", bg=0xF7F3E7),
-    "forest": dict(rest="folotoy_pomodoro_scene_forest.c", focus="folotoy_pomodoro_scene_forest_focus.c", bg=0xD6CBA5),
-    "night":  dict(rest="folotoy_pomodoro_scene_night.c", focus="folotoy_pomodoro_scene_night_focus.c", bg=0xDEE3CE),
+    "cream":  dict(rest="folotoy_pomodoro_scene.c", focus="folotoy_pomodoro_scene_focus.c", bg=0xF5F0E3),
+    "forest": dict(rest="folotoy_pomodoro_scene_forest.c", focus="folotoy_pomodoro_scene_forest_focus.c", bg=0xD8C9A2),
+    "night":  dict(rest="folotoy_pomodoro_scene_night.c", focus="folotoy_pomodoro_scene_night_focus.c", bg=0xE0E2CD),
 }
 
 def font(size):

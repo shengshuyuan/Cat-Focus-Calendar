@@ -8,3 +8,4 @@ __pycache__/
 *.py[cod]
 docs/previews/
 docs/assets/cat-focus-calendar/Cat-Focus-Calendar-full.bin
+scratch/

@@ -19,18 +19,42 @@ static volatile bool s_bl_off;
 static void idle_timer_cb(void *arg)
 {
     (void)arg;
+    if (!clock_app_idle_backlight_allowed()) {
+        ESP_LOGI(TAG, "Idle timeout ignored (always-on clock page)");
+        return;
+    }
     s_bl_off = true;
     bsp_display_backlight(0);
     ESP_LOGI(TAG, "Idle timeout: backlight off");
+}
+
+static void idle_timer_stop(void)
+{
+    if (!s_idle_timer) return;
+    esp_timer_stop(s_idle_timer);
 }
 
 static void idle_timer_restart(void)
 {
     if (!s_idle_timer) return;
     esp_timer_stop(s_idle_timer);
+    if (!clock_app_idle_backlight_allowed()) {
+        return;
+    }
     esp_err_t err = esp_timer_start_once(s_idle_timer, IDLE_BACKLIGHT_MS * 1000ULL);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "idle timer start failed: %s", esp_err_to_name(err));
+    }
+}
+
+static void apply_backlight_policy(void)
+{
+    if (!clock_app_idle_backlight_allowed()) {
+        idle_timer_stop();
+        s_bl_off = false;
+        bsp_display_backlight(100);
+    } else {
+        idle_timer_restart();
     }
 }
 
@@ -45,16 +69,15 @@ static void on_button(bsp_btn_t btn, bsp_btn_ev_t ev, void *user)
     if (s_bl_off) {
         s_bl_off = false;
         bsp_display_backlight(100);
-        idle_timer_restart();
+        apply_backlight_policy();
         ESP_LOGI(TAG, "Key wake: backlight on");
         return;
     }
 
-    idle_timer_restart();
-
     if (!bsp_lvgl_lock(500)) return;
     clock_app_key(btn, ev);
     bsp_lvgl_unlock();
+    apply_backlight_policy();
 }
 
 void app_main(void)

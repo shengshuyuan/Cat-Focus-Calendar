@@ -54,24 +54,29 @@ void clock_time_bootstrap(void)
     setenv("TZ", "CST-8", 1);
     tzset();
 
+    int64_t saved = 0;
+    bool have_nvs = false;
+    nvs_handle_t handle;
+    if (nvs_open(CLOCK_NVS_NS, NVS_READONLY, &handle) == ESP_OK) {
+        if (nvs_get_i64(handle, CLOCK_NVS_KEY, &saved) == ESP_OK &&
+            saved >= 1704067200LL /* 2024-01-01 UTC */) {
+            have_nvs = true;
+            s_have_saved_time = true;
+        }
+        nvs_close(handle);
+    }
+
     time_t now = time(NULL);
     struct tm local = {0};
     localtime_r(&now, &local);
     if (time_looks_valid(&local)) {
-        ESP_LOGI(TAG, "RTC already valid");
+        ESP_LOGI(TAG, "RTC already valid (nvs=%d)", (int)have_nvs);
         return;
     }
 
-    nvs_handle_t handle;
-    if (nvs_open(CLOCK_NVS_NS, NVS_READONLY, &handle) == ESP_OK) {
-        int64_t saved = 0;
-        if (nvs_get_i64(handle, CLOCK_NVS_KEY, &saved) == ESP_OK &&
-            saved >= 1704067200LL /* 2024-01-01 UTC */) {
-            apply_unix((time_t)saved);
-            s_have_saved_time = true;
-            ESP_LOGI(TAG, "restored wall time from NVS (%lld)", (long long)saved);
-        }
-        nvs_close(handle);
+    if (have_nvs) {
+        apply_unix((time_t)saved);
+        ESP_LOGI(TAG, "restored wall time from NVS (%lld)", (long long)saved);
     }
 }
 
@@ -122,4 +127,28 @@ bool clock_time_read_today(int *year, int *month, int *day)
 void clock_time_build_date(int *year, int *month, int *day)
 {
     parse_build_date(year, month, day);
+}
+
+clock_time_trust_t clock_time_trust(void)
+{
+    if (s_synced_this_boot) return CLOCK_TIME_TRUST_SESSION;
+    if (s_have_saved_time) return CLOCK_TIME_TRUST_NVS;
+    return CLOCK_TIME_TRUST_NONE;
+}
+
+bool clock_time_wall_trusted(void)
+{
+    if (!s_have_saved_time && !s_synced_this_boot) return false;
+    time_t now = time(NULL);
+    struct tm local = {0};
+    localtime_r(&now, &local);
+    return time_looks_valid(&local);
+}
+
+bool clock_time_read_local(struct tm *out)
+{
+    if (!out) return false;
+    time_t now = time(NULL);
+    localtime_r(&now, out);
+    return time_looks_valid(out);
 }

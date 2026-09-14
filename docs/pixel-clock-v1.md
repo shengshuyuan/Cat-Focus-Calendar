@@ -20,7 +20,7 @@ This branch implements the first visual and interaction slice for the FoloToy AI
 - A small generated LVGL font contains the Chinese glyphs used by these screens. The font source is LXGW WenKai Medium installed locally during development; only the generated C glyph table is tracked.
 - When regenerating, always pass `--no-compress` (this repo leaves `CONFIG_LV_USE_FONT_COMPRESSED` off) and keep the export symbol `folotoy_font`. Missing glyphs or compressed bitmaps without decompress support render Chinese as blank. Extend `--symbols` whenever copy changes, then verify the Wi-Fi page, solar terms, and pomodoro strings on device.
 - The static cat, plant, books, mountain, and branch art uses RGB565 assets in Flash. This keeps detailed pixel scenes faithful to the reference without building hundreds of LVGL objects; see [pixel-clock art assets](../assets/images/pixel-clock/README.md).
-- During a running focus interval, the lower Pomodoro scene changes from the sleeping calico cat to the matching awake standing-calico asset. Idle, paused, and break states keep the resting scene.
+- Focus running, focus paused, and abandon-confirmation states use the awake scene of the selected skin. Idle and break states use its resting scene.
 - Bottom navigation uses three dark capsule buttons with state-appropriate pixel icons; the four off-design progress squares are removed.
 - After ten minutes without a `CLICK` or `LONG` event, the firmware sets only the display backlight to zero. It preserves the current page and Pomodoro state; the first eligible button event wakes the backlight without navigating, and the next event operates the UI. This is not display-controller sleep or deep sleep.
 

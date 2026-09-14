@@ -96,3 +96,10 @@
 - **Remaining risk / follow-up**: uncovered boards, networks, temperatures, battery levels, or release concerns.
 
 Future incidents will be appended here and reflected in the bilingual index. Historical evidence stays intact so the log records why a fix is trusted, not only that it exists.
+
+### 2026-09-12 — Always-on wallpaper clock page
+
+- **Symptom / goal**: Need a full-screen wallpaper clock that stays lit and does not steal pomodoro background ticks.
+- **Fix**: `PAGE_CLOCK` in `clock_app.c` with Flash RGB565 wallpaper; calendar long-OK enter / OK leave; `clock_app_idle_backlight_allowed()` gates `main` idle timer; `clock_time_wall_trusted()` + single `time()` snapshot for date/clock.
+- **Validation**: Host `tools/validate.sh --static`; firmware build when IDF available. No flash in this change set.
+- **Remaining risk**: Device acceptance for long-OK vs click ordering and visual alignment vs preview; full-screen image increases Flash use (~154 KB).

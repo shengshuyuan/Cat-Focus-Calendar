@@ -91,11 +91,16 @@ bool pomodoro_model_pause(pomodoro_model_t *model, uint64_t now_ms) {
     if (!model) return false;
     update_running_remaining(model, now_ms);
     if (model->state == POMODORO_FOCUS_RUNNING) {
+        /* Leave completion to tick so the caller cannot strand a zero-second
+         * session in FOCUS_PAUSED when a pause arrives at its deadline. */
+        if (model->remaining_sec == 0) return false;
         model->state = POMODORO_FOCUS_PAUSED;
         model->deadline_ms = 0;
         return true;
     }
     if (model->state == POMODORO_BREAK_RUNNING) {
+        /* The break completion event follows the same boundary rule. */
+        if (model->break_remaining_sec == 0) return false;
         model->state = POMODORO_BREAK_PAUSED;
         model->deadline_ms = 0;
         return true;

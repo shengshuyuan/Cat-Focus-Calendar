@@ -19,6 +19,10 @@ GREEN = "#506A4D"
 GREEN_DARK = "#304B38"
 RUST = "#B65B3F"
 RED = "#A13127"
+TOMATO = "#E23B32"
+TOMATO_DARK = "#BE2D2A"
+LEAF = "#7CB342"
+STEM = "#6B4423"
 MUTED = "#7C7A70"
 SHADOW = "#D8CDB6"
 SUN = "#EFD8A4"
@@ -75,6 +79,8 @@ def label(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], value: str,
     x, y, w, h = box
     if align == "left":
         draw.text((x, y + h // 2), value, fill=fill, font=load_font(size, mono=mono), anchor="lm")
+    elif align == "right":
+        draw.text((x + w, y + h // 2), value, fill=fill, font=load_font(size, mono=mono), anchor="rm")
     else:
         draw.text((x + w // 2, y + h // 2), value, fill=fill,
                   font=load_font(size, mono=mono), anchor="mm")
@@ -94,8 +100,9 @@ def colon(draw: ImageDraw.ImageDraw, x: int, y: int, scale: int, fill: str = INK
 
 
 def status_icons(draw: ImageDraw.ImageDraw, background: str) -> None:
-    for x, y in ((174, 12), (180, 9), (186, 12), (180, 16)):
-        rect(draw, x, y, 4, 4, GREEN)
+    for x, y, w, h in ((186, 7, 3, 3), (191, 5, 3, 3), (196, 5, 3, 3), (201, 7, 3, 3),
+                       (189, 11, 12, 4), (191, 14, 8, 3)):
+        rect(draw, x, y, w, h, GREEN)
     rect(draw, 207, 10, 28, 14, INK)
     rect(draw, 211, 13, 20, 8, background)
     rect(draw, 235, 14, 3, 6, INK)
@@ -105,21 +112,47 @@ def status_icons(draw: ImageDraw.ImageDraw, background: str) -> None:
 
 def nav_icon(draw: ImageDraw.ImageDraw, x: int, kind: str, y: int = 286) -> None:
     if kind == "up":
-        rect(draw, x + 30, y + 8, 12, 4, PAPER)
-        rect(draw, x + 33, y + 5, 6, 4, PAPER)
-        rect(draw, x + 35, y + 2, 2, 4, PAPER)
-        rect(draw, x + 33, y + 12, 6, 10, PAPER)
+        for i in range(8):
+            yy = y + 9 + i
+            spread = 1 + i * 2
+            rect(draw, x + 36 - spread - 2, yy, 6, 3, PAPER)
+            rect(draw, x + 36 + spread - 4, yy, 6, 3, PAPER)
     elif kind == "down":
-        rect(draw, x + 33, y + 6, 6, 10, PAPER)
-        rect(draw, x + 30, y + 16, 12, 4, PAPER)
-        rect(draw, x + 33, y + 19, 6, 4, PAPER)
-        rect(draw, x + 35, y + 22, 2, 4, PAPER)
+        for i in range(8):
+            yy = y + 11 + i
+            spread = 1 + (7 - i) * 2
+            rect(draw, x + 36 - spread - 2, yy, 6, 3, PAPER)
+            rect(draw, x + 36 + spread - 4, yy, 6, 3, PAPER)
     elif kind == "ok":
         rect(draw, x + 24, y + 6, 24, 16, PAPER)
         rect(draw, x + 27, y + 9, 18, 10, INK)
         rect(draw, x + 30, y + 13, 4, 4, PAPER)
         rect(draw, x + 34, y + 15, 8, 4, PAPER)
         rect(draw, x + 40, y + 9, 4, 8, PAPER)
+    elif kind == "pomo":
+        rect(draw, x + 31, y + 8, 10, 2, TOMATO)
+        rect(draw, x + 28, y + 10, 16, 3, TOMATO)
+        rect(draw, x + 26, y + 13, 20, 3, TOMATO)
+        rect(draw, x + 25, y + 16, 22, 6, TOMATO)
+        rect(draw, x + 26, y + 22, 20, 2, TOMATO)
+        rect(draw, x + 28, y + 24, 16, 2, TOMATO)
+        rect(draw, x + 31, y + 26, 10, 1, TOMATO)
+        rect(draw, x + 40, y + 13, 6, 10, TOMATO_DARK)
+        rect(draw, x + 42, y + 15, 4, 7, TOMATO_DARK)
+        rect(draw, x + 29, y + 13, 4, 4, PAPER)
+        rect(draw, x + 30, y + 14, 2, 2, PAPER)
+        rect(draw, x + 21, y + 7, 7, 3, LEAF)
+        rect(draw, x + 19, y + 8, 4, 2, LEAF)
+        rect(draw, x + 26, y + 3, 5, 5, LEAF)
+        rect(draw, x + 27, y + 1, 3, 3, LEAF)
+        rect(draw, x + 33, y + 2, 6, 6, LEAF)
+        rect(draw, x + 34, y + 1, 4, 2, LEAF)
+        rect(draw, x + 41, y + 3, 5, 5, LEAF)
+        rect(draw, x + 42, y + 1, 3, 3, LEAF)
+        rect(draw, x + 44, y + 7, 7, 3, LEAF)
+        rect(draw, x + 49, y + 8, 4, 2, LEAF)
+        rect(draw, x + 35, y + 0, 2, 5, STEM)
+        rect(draw, x + 36, y + 1, 2, 3, STEM)
     elif kind == "pause":
         rect(draw, x + 28, y + 6, 6, 16, PAPER)
         rect(draw, x + 38, y + 6, 6, 16, PAPER)
@@ -132,32 +165,39 @@ def nav(draw: ImageDraw.ImageDraw, kinds: tuple[str, str, str]) -> None:
         nav_icon(draw, x, kind)
 
 
-def compact_nav_icon(draw: ImageDraw.ImageDraw, x: int, kind: str) -> None:
-    ox, y = x + 2, 286
+def compact_nav_icon(draw: ImageDraw.ImageDraw, x: int, kind: str, ox: int) -> None:
+    y = 286
+    cx = x + ox + 8
     if kind == "up":
-        rect(draw, ox + 4, y + 10, 8, 3, PAPER)
-        rect(draw, ox + 6, y + 7, 4, 3, PAPER)
-        rect(draw, ox + 7, y + 5, 2, 3, PAPER)
-        rect(draw, ox + 6, y + 13, 4, 8, PAPER)
+        for i in range(4):
+            yy = y + 9 + i
+            spread = i * 2
+            rect(draw, cx - 2 - spread, yy, 4, 2, PAPER)
+            rect(draw, cx - 2 + spread, yy, 4, 2, PAPER)
     elif kind == "down":
-        rect(draw, ox + 6, y + 7, 4, 8, PAPER)
-        rect(draw, ox + 4, y + 15, 8, 3, PAPER)
-        rect(draw, ox + 6, y + 18, 4, 3, PAPER)
-        rect(draw, ox + 7, y + 20, 2, 3, PAPER)
+        for i in range(4):
+            yy = y + 11 + i
+            spread = (3 - i) * 2
+            rect(draw, cx - 2 - spread, yy, 4, 2, PAPER)
+            rect(draw, cx - 2 + spread, yy, 4, 2, PAPER)
     else:
-        rect(draw, ox + 2, y + 8, 12, 12, PAPER)
-        rect(draw, ox + 4, y + 10, 8, 8, INK)
-        rect(draw, ox + 5, y + 13, 2, 2, PAPER)
-        rect(draw, ox + 7, y + 14, 4, 2, PAPER)
-        rect(draw, ox + 10, y + 10, 2, 5, PAPER)
+        for i in range(6):
+            xx = x + ox + 2 + i
+            spread = 1 + i
+            rect(draw, xx, y + 12 - spread, 2, 4, PAPER)
+            rect(draw, xx, y + 12 + spread - 1, 2, 4, PAPER)
 
 
 def nav_zh(draw: ImageDraw.ImageDraw) -> None:
     rect(draw, 14, 278, 212, 2, SHADOW)
-    for x, kind, caption in zip((8, 84, 160), ("up", "down", "ok"), ("前一天", "后一天", "返回")):
+    icon_w, gap = 16, 6
+    for x, kind, caption in zip((8, 84, 160), ("up", "down", "back"), ("前一天", "后一天", "返回")):
         rect(draw, x, 286, 72, 28, INK)
-        compact_nav_icon(draw, x, kind)
-        label(draw, (x + 18, 290, 52, 20), caption, PAPER, 14, align="left")
+        text_w = len(caption) * 13
+        group = icon_w + gap + text_w
+        start = max(2, (72 - group) // 2)
+        compact_nav_icon(draw, x, kind, start)
+        label(draw, (x + start + icon_w + gap, 293, text_w, 16), caption, PAPER, 13, align="left")
 
 
 def calendar_sun(draw: ImageDraw.ImageDraw) -> None:
@@ -277,17 +317,25 @@ def calendar_screen(year: int = 2026, month: int = 9, selected: int = 7) -> Imag
         lunar_color = PAPER if selected_now else MUTED
         label(draw, (x, y + 1, 29, 16), str(day), day_color, 14, mono=True)
         label(draw, (x, y + 15, 29, 14), lunar_cell(year, month, day), lunar_color, 11)
-    nav(draw, ("up", "down", "ok"))
+    nav(draw, ("up", "down", "pomo"))
     return image
 
 
-def banner(draw: ImageDraw.ImageDraw, x: int, y: int, text_value: str) -> None:
+def banner_frame(draw: ImageDraw.ImageDraw, x: int, y: int) -> None:
     rect(draw, x, y, 28, 90, RED)
     rect(draw, x + 2, y + 2, 24, 86, PAPER)
     for cx, cy in ((x + 1, y + 1), (x + 24, y + 1), (x + 1, y + 86), (x + 24, y + 86)):
         rect(draw, cx, cy, 3, 3, RED)
+
+
+def banner_text(draw: ImageDraw.ImageDraw, x: int, y: int, text_value: str) -> None:
     for index, character in enumerate(text_value):
         label(draw, (x + 2, y + 12 + index * 17, 24, 17), character, RED, 16)
+
+
+def banner(draw: ImageDraw.ImageDraw, x: int, y: int, text_value: str) -> None:
+    banner_frame(draw, x, y)
+    banner_text(draw, x, y, text_value)
 
 
 def draw_frame(draw: ImageDraw.ImageDraw, x: int, y: int, width: int, height: int,
@@ -336,13 +384,16 @@ def almanac_items(year: int, month: int, day: int, bank: tuple[str, ...], salt: 
             continue
         candidate = bank[index]
         if avoid_alike and picked:
-            sleep_pair = any(value in candidate for value in ("熬夜", "晚睡")) and any(
-                value in picked[0] for value in ("熬夜", "晚睡")
+            sleep_pair = any(value in candidate for value in ("熬夜", "晚睡", "赖床")) and any(
+                value in picked[0] for value in ("熬夜", "晚睡", "赖床")
             )
-            video_pair = any(value in candidate for value in ("刷视频", "边吃边刷")) and any(
-                value in picked[0] for value in ("刷视频", "边吃边刷")
+            video_pair = any(value in candidate for value in ("刷视频", "刷手机", "刷剧")) and any(
+                value in picked[0] for value in ("刷视频", "刷手机", "刷剧")
             )
-            if sleep_pair or video_pair:
+            work_pair = any(value in candidate for value in ("加班", "赶工")) and any(
+                value in picked[0] for value in ("加班", "赶工")
+            )
+            if sleep_pair or video_pair or work_pair:
                 continue
         used.add(index)
         picked.append(candidate)
@@ -358,11 +409,9 @@ def chinese_screen(year: int = 2026, month: int = 9, day: int = 7) -> Image.Imag
     image = Image.new("RGB", (240, 320), PAPER)
     draw = ImageDraw.Draw(image)
 
-    for x, y, width in ((8, 70, 18), (14, 66, 14), (10, 96, 16), (18, 92, 12)):
-        rect(draw, x, y, width, 4, CLOUD)
     status_icons(draw, PAPER)
-    banner(draw, 10, 54, "万事顺遂")
-    banner(draw, 202, 54, "专注当下")
+    banner(draw, 10, 75, "万事顺遂")
+    banner_frame(draw, 202, 75)
 
     mountain = Image.open(ART / "calendar-mountain.png").convert("RGB")
     cat = Image.open(ART / "calendar-cat.png").convert("RGB")
@@ -373,38 +422,51 @@ def chinese_screen(year: int = 2026, month: int = 9, day: int = 7) -> Image.Imag
     rect(draw, 207, 152, 12, 2, SUN)
     rect(draw, 210, 154, 6, 2, SUN)
     image.paste(cat, (158, 175))
+    banner_text(draw, 202, 75, "专注当下")
 
+    well_x, well_w, scale, gap, digit_y = 38, 164, 12, 8, 78
+    dw = 5 * scale
     if day < 10:
-        digit(draw, 85, 72, 14, day, RED)
+        digit(draw, well_x + (well_w - dw) // 2, digit_y, scale, day, RED)
     else:
-        digit(draw, 50, 74, 14, day // 10, RED)
-        digit(draw, 126, 74, 14, day % 10, RED)
+        pair = dw + gap + dw
+        x0 = well_x + (well_w - pair) // 2
+        digit(draw, x0, digit_y, scale, day // 10, RED)
+        digit(draw, x0 + dw + gap, digit_y, scale, day % 10, RED)
 
-    label(draw, (8, 8, 120, 20), f"{year} 年 {month} 月", INK, 16, align="left")
+    label(draw, (0, 4, 240, 24), f"{year}年{month}月", INK, 22)
     weekdays = ("星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六")
-    label(draw, (8, 28, 62, 20), weekdays[weekday_sunday_first(year, month, day)], INK, 16, align="left")
-    label(draw, (70, 28, 130, 20), lunar_label(year, month, day), GREEN, 16)
+    leap, lm, ld = lunar_for(year, month, day)
+    lunar = f"农历{'闰' if leap else ''}{MONTHS[lm]}{DAYS[ld]}"
+    label(draw, (0, 30, 240, 18), f"{weekdays[weekday_sunday_first(year, month, day)]}  {lunar}", GREEN, 13)
     term = term_for(year, month, day)
-    label(draw, (70, 46, 130, 20), f"今日{term}" if term else "", GREEN, 16)
+    if term:
+        label(draw, (0, 48, 240, 16), f"今日{term}", GREEN, 13)
 
-    draw_frame(draw, 36, 178, 168, 26, RED)
-    rect(draw, 32, 186, 6, 10, RED)
-    rect(draw, 202, 186, 6, 10, RED)
-    label(draw, (40, 180, 160, 22), ganzhi_label(year, month, day), INK, 16)
+    draw_frame(draw, 20, 178, 132, 26, RED)
+    rect(draw, 16, 186, 6, 10, RED)
+    rect(draw, 146, 186, 6, 10, RED)
+    label(draw, (24, 178, 124, 26), ganzhi_label(year, month, day), INK, 16)
 
     draw_frame(draw, 12, 212, 216, 52, RED)
     rect(draw, 118, 216, 2, 44, RED)
-    rect(draw, 20, 222, 22, 22, RED)
-    label(draw, (20, 223, 22, 22), "宜", PAPER, 16)
-    rect(draw, 128, 222, 22, 22, GREEN)
-    label(draw, (128, 223, 22, 22), "忌", PAPER, 16)
+    rect(draw, 20, 227, 22, 22, RED)
+    label(draw, (20, 227, 22, 22), "宜", PAPER, 16)
+    rect(draw, 128, 227, 22, 22, GREEN)
+    label(draw, (128, 227, 22, 22), "忌", PAPER, 16)
 
-    yi_bank = ("专注", "学习", "阅读", "AI编程", "打扫", "整理", "早起", "番茄钟", "复盘", "喝水", "拉伸", "赚钱")
-    ji_bank = ("拖延", "熬夜", "晚睡", "内耗", "颓废", "刷视频", "开很多会", "边吃边刷")
+    yi_bank = ("早起", "写信", "整理", "运动", "浇花", "记账", "练字", "听歌", "复盘", "散步", "做饭", "深呼吸", "收纳", "喝水", "拉伸", "专注")
+    ji_bank = ("拖延", "熬夜", "赖床", "比较", "硬撑", "空腹", "赶工", "起哄", "刷剧", "内耗", "透支", "冷饭", "加塞", "买闲")
     yi = almanac_items(year, month, day, yi_bank, 1)
     ji = almanac_items(year, month, day, ji_bank, 2, avoid_alike=True)
-    draw.multiline_text((46, 224), "\n".join(yi), fill=INK, font=load_font(16), spacing=-1)
-    draw.multiline_text((152, 224), "\n".join(ji), fill=INK, font=load_font(16), spacing=-1)
+    yi_font = load_font(13)
+    for col_x, lines in ((46, yi), (152, ji)):
+        yy = 224
+        for line in lines:
+            bbox = yi_font.getbbox(line)
+            lw = bbox[2] - bbox[0]
+            draw.text((col_x + (70 - lw) / 2, yy), line, fill=INK, font=yi_font)
+            yy += 14
     nav_zh(draw)
     return image
 

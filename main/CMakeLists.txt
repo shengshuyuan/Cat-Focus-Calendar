@@ -20,6 +20,7 @@ idf_component_register(
          "assets/folotoy_pomodoro_scene_night_focus.c"
          "assets/folotoy_calendar_mountain.c"
          "assets/folotoy_calendar_cat.c"
+         "assets/folotoy_clock_wallpaper.c"
          "fap_screenshot.c"
     INCLUDE_DIRS "."
     REQUIRES bsp driver esp_timer nvs_flash esp_event esp_netif esp_wifi esp_http_server esp_http_client

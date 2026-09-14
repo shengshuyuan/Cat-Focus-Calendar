@@ -34,6 +34,20 @@ static void test_focus_pause_resume_and_completion(void) {
     assert(model.completed_sessions == 1);
 }
 
+static void test_focus_pause_at_deadline_keeps_completion_event(void) {
+    pomodoro_model_t model;
+    pomodoro_model_defaults(&model);
+    assert(pomodoro_model_start_focus(&model, 1000));
+
+    uint64_t deadline = 1000 + pomodoro_model_focus_min(&model) * 60000ULL;
+    assert(!pomodoro_model_pause(&model, deadline));
+    assert(model.state == POMODORO_FOCUS_RUNNING);
+    assert(model.remaining_sec == 0);
+    assert(pomodoro_model_tick(&model, deadline) == POMODORO_EVENT_FOCUS_COMPLETE);
+    assert(model.state == POMODORO_REWARD);
+    assert(model.completed_sessions == 1);
+}
+
 static void test_abandon_timeout_and_confirm(void) {
     pomodoro_model_t model;
     pomodoro_model_defaults(&model);
@@ -92,6 +106,21 @@ static void test_break_timer(void) {
     assert(model.state == POMODORO_IDLE);
 }
 
+static void test_break_pause_at_deadline_keeps_completion_event(void) {
+    pomodoro_model_t model;
+    pomodoro_model_defaults(&model);
+    model.state = POMODORO_BREAK_PROMPT;
+    model.pending_break_min = 5;
+    assert(pomodoro_model_start_break(&model, 1000));
+
+    uint64_t deadline = 1000 + 5 * 60000ULL;
+    assert(!pomodoro_model_pause(&model, deadline));
+    assert(model.state == POMODORO_BREAK_RUNNING);
+    assert(model.break_remaining_sec == 0);
+    assert(pomodoro_model_tick(&model, deadline) == POMODORO_EVENT_BREAK_COMPLETE);
+    assert(model.state == POMODORO_IDLE);
+}
+
 static void test_restore_is_safe(void) {
     pomodoro_model_t model;
     pomodoro_model_defaults(&model);
@@ -112,9 +141,11 @@ static void test_restore_is_safe(void) {
 int main(void) {
     test_defaults_and_selection();
     test_focus_pause_resume_and_completion();
+    test_focus_pause_at_deadline_keeps_completion_event();
     test_abandon_timeout_and_confirm();
     test_break_cycle_and_growth();
     test_break_timer();
+    test_break_pause_at_deadline_keeps_completion_event();
     test_restore_is_safe();
     puts("pomodoro_model: all tests passed");
     return 0;

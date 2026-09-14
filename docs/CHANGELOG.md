@@ -6,9 +6,16 @@
 
 ## Unreleased
 
+- Fixed sleeping/fragmented ragdoll and Exotic-shorthair focus artwork; regenerated all six scene arrays with exact opaque RGB565 conversion.
+- Fixed pausing at the focus/break deadline getting stuck at 00:00; completion events remain handled by the next timer tick.
+
+- Tightened the Chinese daily page: two-row header, solar term in the couplet well, shorter ganzhi plaque beside the cat, and 13 px yi/ji copy.
+- Replaced calendar nav arrows with shaftless carets and the Pomodoro entry with a round red tomato.
 - Replaced BLE Wi-Fi provisioning with a SoftAP web portal at `http://192.168.4.1`. Credentials persist in Flash; NTP still runs after a successful join.
 - Reworked the calendar header and month grid: generated 11/13/22 px fonts, lunar labels in each cell, and a today-anchor so browsing other months lands on day 1 and returning to this month restores today.
 - Locked the Chinese daily-page layer order, top-centered lunar/term copy, and two-line yi/ji suggestions. Pomodoro skins now share one paper color per theme and only swap the cat scene between focus and rest.
+- Unified ragdoll and Exotic-shorthair Pomodoro rooms onto the warm lamp-lit rest background; starting a countdown now changes only the cat pose, not the wall color.
+- Sleeping Pomodoro cats use clear squinted eyelids; sitting focus poses keep large open cute eyes.
 - Updated the README preview order to show the connected monthly calendar first and the active 24:59 Pomodoro countdown third. Both are source-based renders, not device captures.
 
 - Added a ten-minute idle-backlight policy. It sets the backlight to zero without losing the current page or Pomodoro state; the first eligible button event wakes the display and the next one operates the UI.
