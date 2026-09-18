@@ -84,6 +84,17 @@
 - **验证**：`tools/validate.sh --static`；有 IDF 时编译固件。本变更不刷机。
 - **剩余风险**：真机长按/短按顺序与预览对齐；整屏图约占 Flash 154 KB。
 
+
+### 2026-09-17 — 番茄钟轮次标签提前跳号
+
+- **症状**：完成第 1 轮专注进入奖励/短休时，UI 已显示「第 2 / 4 轮」；完成第 4 轮长休时又立刻回到「第 1 / 4 轮」，轮次观感错乱。
+- **复现**：任意专注倒计时走完 → 奖励/休息提示；长按/跳过休息前后对比标签。
+- **证据**：`pomodoro_model_tick` 在 FOCUS 完成时执行 `pomodoro_round = (pomodoro_round + 1) % 4`，而 `clock_app` 始终以 `pomodoro_round + 1` 渲染「第 N / 4 轮」。
+- **根因**：轮次在专注结束时提前递增，未把奖励/休息仍归属当前轮。
+- **修复**：FOCUS 完成只设 `pending_break_min`；在 `pomodoro_model_skip_break` 与 BREAK 完成路径再 `(round + 1) % 4`。主机测试覆盖 focus1/skip、第四轮长休与 abandon 不推进。
+- **验证**：`./tools/validate.sh --static`（含 `tests/test_pomodoro_model.c`）。本变更不刷机。
+- **剩余风险**：已落盘的中间态若停在旧语义的 reward/break（round 已 +1），重启后标签可能偏一格，需再跑完一轮休息或手动对齐；真机标签验收待刷机后确认。
+
 ## 4. 当前工作流
 
 1. 在 `feature/*` 分支上做小步修改，先阅读板级文档和源代码事实。

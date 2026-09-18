@@ -140,6 +140,7 @@ bool pomodoro_model_cancel_abandon(pomodoro_model_t *model) {
 bool pomodoro_model_confirm_abandon(pomodoro_model_t *model) {
     if (!model || model->state != POMODORO_ABANDON_CONFIRM) return false;
     model->state = POMODORO_IDLE;
+    model->pomodoro_round = 0; /* abandon ends the current 4-cycle */
     model->remaining_sec = pomodoro_model_focus_min(model) * 60U;
     model->confirm_deadline_ms = 0;
     return true;
@@ -158,6 +159,7 @@ bool pomodoro_model_start_break(pomodoro_model_t *model, uint64_t now_ms) {
 
 bool pomodoro_model_skip_break(pomodoro_model_t *model) {
     if (!model || model->state != POMODORO_BREAK_PROMPT) return false;
+    model->pomodoro_round = (model->pomodoro_round + 1) % 4;
     model->state = POMODORO_IDLE;
     model->break_remaining_sec = 0;
     model->remaining_sec = pomodoro_model_focus_min(model) * 60U;
@@ -172,7 +174,7 @@ pomodoro_event_t pomodoro_model_tick(pomodoro_model_t *model, uint64_t now_ms) {
         model->completed_sessions++;
         model->completed_focus_min += pomodoro_model_focus_min(model);
         model->pending_break_min = (model->pomodoro_round == 3) ? 15 : 5;
-        model->pomodoro_round = (model->pomodoro_round + 1) % 4;
+        /* Keep pomodoro_round through reward/break; advance on break end/skip. */
         model->reward_pending = true;
         model->state = POMODORO_REWARD;
         model->deadline_ms = 0;
@@ -192,6 +194,7 @@ pomodoro_event_t pomodoro_model_tick(pomodoro_model_t *model, uint64_t now_ms) {
     }
 
     if (model->state == POMODORO_BREAK_RUNNING && model->break_remaining_sec == 0) {
+        model->pomodoro_round = (model->pomodoro_round + 1) % 4;
         model->state = POMODORO_IDLE;
         model->remaining_sec = pomodoro_model_focus_min(model) * 60U;
         model->deadline_ms = 0;

@@ -6,6 +6,10 @@
 /** TZ + restore last NTP time from NVS when RTC invalid. */
 void clock_time_bootstrap(void);
 
+/** Set local wall clock (CST-8), persist to NVS, and mark session-trusted. */
+bool clock_time_set_local(int year, int month, int day, int hour, int minute, int second);
+
+
 /** Compile-time __DATE__ as y/m/d fallback before RTC/NVS is usable. */
 void clock_time_build_date(int *year, int *month, int *day);
 

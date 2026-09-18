@@ -49,6 +49,8 @@ static void parse_build_date(int *year, int *month, int *day)
     *day = 11;
 }
 
+bool clock_time_set_local(int year, int month, int day, int hour, int minute, int second);
+
 void clock_time_bootstrap(void)
 {
     setenv("TZ", "CST-8", 1);
@@ -69,14 +71,29 @@ void clock_time_bootstrap(void)
     time_t now = time(NULL);
     struct tm local = {0};
     localtime_r(&now, &local);
-    if (time_looks_valid(&local)) {
-        ESP_LOGI(TAG, "RTC already valid (nvs=%d)", (int)have_nvs);
-        return;
-    }
-
-    if (have_nvs) {
+    if (!time_looks_valid(&local) && have_nvs) {
         apply_unix((time_t)saved);
         ESP_LOGI(TAG, "restored wall time from NVS (%lld)", (long long)saved);
+        now = time(NULL);
+        localtime_r(&now, &local);
+    } else if (time_looks_valid(&local)) {
+        ESP_LOGI(TAG, "RTC already valid (nvs=%d)", (int)have_nvs);
+    }
+
+    /* If wall clock is untrusted or stuck before 2026-09-17, seed today. */
+    bool need_seed = !time_looks_valid(&local);
+    if (!need_seed) {
+        int y = local.tm_year + 1900;
+        int m = local.tm_mon + 1;
+        int d = local.tm_mday;
+        if (y < 2026 || (y == 2026 && m < 9) || (y == 2026 && m == 9 && d < 17)) {
+            need_seed = true;
+        }
+    }
+    if (need_seed) {
+        if (clock_time_set_local(2026, 9, 17, 18, 23, 19)) {
+            ESP_LOGI(TAG, "seeded wall clock to 2026-09-17");
+        }
     }
 }
 
@@ -127,6 +144,32 @@ bool clock_time_read_today(int *year, int *month, int *day)
 void clock_time_build_date(int *year, int *month, int *day)
 {
     parse_build_date(year, month, day);
+}
+
+
+bool clock_time_set_local(int year, int month, int day, int hour, int minute, int second)
+{
+    if (year < 2024 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+        return false;
+    }
+
+    struct tm local = {0};
+    local.tm_year = year - 1900;
+    local.tm_mon = month - 1;
+    local.tm_mday = day;
+    local.tm_hour = hour;
+    local.tm_min = minute;
+    local.tm_sec = second;
+    local.tm_isdst = -1;
+    time_t sec = mktime(&local);
+    if (sec < 1704067200LL) return false;
+
+    apply_unix(sec);
+    clock_time_on_sntp_sync();
+    ESP_LOGI(TAG, "manual wall clock %04d-%02d-%02d %02d:%02d:%02d",
+             year, month, day, hour, minute, second);
+    return true;
 }
 
 clock_time_trust_t clock_time_trust(void)

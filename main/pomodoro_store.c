@@ -11,7 +11,7 @@
 #include "freertos/task.h"
 
 #define STORE_MAGIC 0x504F4D4FU
-#define STORE_VERSION 1
+#define STORE_VERSION 2
 
 typedef struct {
     uint32_t magic;
@@ -72,7 +72,8 @@ static store_blob_t blob_from_model(const pomodoro_model_t *model) {
 }
 
 static bool model_from_blob(const store_blob_t *blob, pomodoro_model_t *model) {
-    if (blob->magic != STORE_MAGIC || blob->version != STORE_VERSION ||
+    if (blob->magic != STORE_MAGIC ||
+        (blob->version != 1 && blob->version != STORE_VERSION) ||
         blob->size != sizeof(*blob) ||
         blob->crc32 != crc32_bytes(blob, offsetof(store_blob_t, crc32))) {
         return false;
@@ -90,6 +91,16 @@ static bool model_from_blob(const store_blob_t *blob, pomodoro_model_t *model) {
     model->completed_sessions = blob->completed_sessions;
     model->completed_focus_min = blob->completed_focus_min;
     model->break_remaining_sec = blob->break_remaining_sec;
+    /* v1 blobs may carry a mid-cycle index from the old advance-on-focus
+     * timing. Reset the 4-cycle pointer to round 1 and idle once. */
+    if (blob->version == 1) {
+        model->pomodoro_round = 0;
+        model->reward_pending = false;
+        model->break_remaining_sec = 0;
+        model->pending_break_min = 5;
+        model->state = POMODORO_IDLE;
+        model->remaining_sec = pomodoro_model_focus_min(model) * 60U;
+    }
     pomodoro_model_restore(model);
     return true;
 }
@@ -135,13 +146,19 @@ bool pomodoro_store_init(pomodoro_model_t *model) {
 
     store_blob_t blob;
     size_t size = sizeof(blob);
+    bool migrated_v1 = false;
     err = nvs_get_blob(s_nvs, "state", &blob, &size);
     if (err == ESP_OK && size == sizeof(blob)) {
+        migrated_v1 = (blob.version == 1);
         if (!model_from_blob(&blob, model)) {
             ESP_LOGW(TAG, "Stored state invalid; using defaults");
+            migrated_v1 = false;
         } else {
             ESP_LOGI(TAG, "Restored %lu completed focus sessions",
                      (unsigned long)model->completed_sessions);
+            if (migrated_v1) {
+                ESP_LOGI(TAG, "Migrated pomo store v1→v2; reset cycle to round 1");
+            }
         }
     } else if (err != ESP_ERR_NVS_NOT_FOUND) {
         ESP_LOGW(TAG, "NVS load failed: %s", esp_err_to_name(err));
@@ -154,6 +171,9 @@ bool pomodoro_store_init(pomodoro_model_t *model) {
         return false;
     }
     s_ready = true;
+    if (migrated_v1) {
+        pomodoro_store_request_save(model);
+    }
     return true;
 }
 
