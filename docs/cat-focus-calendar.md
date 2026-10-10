@@ -44,7 +44,7 @@ Five pages, all entered from the calendar:
 ### 2.1 Calendar
 
 - Shows year/month, the month grid, a lunar summary, today's solar-term name when it applies, and the selected-day marker.
-- **Short UP/DOWN**: change month (see section 3).
+- **Short UP/DOWN**: change month (see section 3). A small rust dot distinguishes today from another selected date in the current month. Six-row months hide lower decoration to keep lunar dates clear.
 - When the clock is unsynced, the bottom hint tells the user to long-press DOWN to provision.
 - After about ten minutes without a key, only the backlight turns off; the first function-key event wakes the display and does not change page.
 
@@ -53,10 +53,10 @@ Five pages, all entered from the calendar:
 
 - Full-screen cream cat wallpaper (`main/assets/folotoy_clock_wallpaper.c`, 240×320 RGB565 in Flash; LVGL reads Flash directly — no second full-frame RAM buffer).
 - Centered top: solar date (`YYYY` / month / day with Chinese units), Chinese weekday, and lunar line via `format_lunar_plain`, all from a trusted **today** `clock_time` snapshot (not the calendar browse selection). Do not show a "Beijing time" label.
-- Large pixel-block `HH:mm` (~`#372A22`). When wall time is untrusted: dashed digits plus the existing sync-needed hint string; never use compile `__DATE__` as today.
-- Pomodoro keeps ticking in the background.
+- Large pixel-block `HH:mm` (~`#372A22`). Until synchronization or explicit setting this boot, show dashed digits and a time-not-calibrated hint. Saved NVS time cannot account for power-off duration; never use compile `__DATE__` as today.
+- Pomodoro keeps ticking in the background; the trusted clock page shows active or paused focus minutes below the clock.
 - Backlight stays on: `clock_app_idle_backlight_allowed()` is false here; `main` stops the 10-minute idle timer and keeps BL at 100%; leaving restores the full idle window.
-- Long-OK enter suppresses a following short-OK so pomodoro is not entered by accident.
+- The installed button driver emits separate long-press and single-click events; the next real short OK remains usable.
 
 ### 2.2 Chinese daily page — locked UI
 
@@ -89,7 +89,8 @@ The left couplet is peer decoration. The right couplet text must stay in the rai
 - Three themes stored in NVS: cream calico, ragdoll, and orange Exotic Shorthair.
 - **Long-press UP** cycles the theme and shows a toast for about 1.5 s.
 - Scene art is about `230×107` RGB565. Paper and digit colors follow the theme. **Focus and rest of the same skin share one background color and the same warm room**; only the cat pose swaps (`scene_focus` sitting / `scene_rest` sleeping).
-- While idle, UP cycles duration; OK starts, pauses, or resumes; completion may play an ES8311 chime (mute is respected).
+- While idle, UP cycles duration; OK starts, pauses, or resumes. While focus is paused, UP asks to end the round; DOWN cancels and OK confirms without counting completion. In the break prompt, UP skips the break. During the completion display, OK starts the break immediately. Long DOWN toggles the persisted chime setting and shows feedback.
+- Bottom captions follow UP / DOWN / OK and update with state; a blank caption means no short-press action. Returning from a running timer keeps it ticking.
 
 ### 2.4 Wi-Fi provisioning (SoftAP)
 

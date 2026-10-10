@@ -205,7 +205,24 @@ static void test_round_stays_through_reward_break_then_advances(void) {
     assert(model.pomodoro_round == 0);
 }
 
+static void test_start_break_during_reward(void) {
+    pomodoro_model_t model;
+    pomodoro_model_defaults(&model);
+    assert(!pomodoro_model_start_break(&model, 0));
+    assert(pomodoro_model_start_focus(&model, 0));
+    uint64_t end = pomodoro_model_focus_min(&model) * 60000ULL;
+    assert(pomodoro_model_tick(&model, end) == POMODORO_EVENT_FOCUS_COMPLETE);
+    assert(pomodoro_model_start_break(&model, end + 1));
+    assert(model.state == POMODORO_BREAK_RUNNING);
+    assert(!model.reward_pending && model.reward_deadline_ms == 0);
+    assert(model.break_remaining_sec == 300);
+    assert(pomodoro_model_tick(&model, end + POMODORO_REWARD_MS) == POMODORO_EVENT_NONE);
+    assert(model.state == POMODORO_BREAK_RUNNING);
+    assert(model.completed_sessions == 1);
+}
+
 int main(void) {
+    test_start_break_during_reward();
     test_defaults_and_selection();
     test_focus_pause_resume_and_completion();
     test_focus_pause_at_deadline_keeps_completion_event();

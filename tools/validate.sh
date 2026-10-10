@@ -36,6 +36,9 @@ run_static_checks() {
         tests/test_pomodoro_model.c main/pomodoro_model.c \
         -o "${test_dir}/test_pomodoro_model"
     "${test_dir}/test_pomodoro_model"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain -Itests/clock_stubs \
+        tests/test_clock_time.c -o "${test_dir}/test_clock_time"
+    "${test_dir}/test_clock_time"
     python3 tests/test_verify_firmware.py
     rm -rf "${test_dir}"
     echo "Host tests: PASS"

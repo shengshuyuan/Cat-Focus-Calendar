@@ -6,6 +6,10 @@
 
 ## Unreleased
 
+- Clarify state-aware UP / DOWN / OK captions, paused/ready/completed copy, end-round confirmation, skip-break and persisted chime control.
+- Preserve the next real short OK after a long press; keep six-row lunar calendars clear and distinguish today from a browsing selection.
+- Remove the debug clock seed; restored NVS time remains uncalibrated until this-boot synchronization. Refresh Wi-Fi status icons and show background focus minutes on the clock.
+
 - Fixed sleeping/fragmented ragdoll and Exotic-shorthair focus artwork; regenerated all six scene arrays with exact opaque RGB565 conversion.
 - Fixed pausing at the focus/break deadline getting stuck at 00:00; completion events remain handled by the next timer tick.
 

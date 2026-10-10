@@ -13,7 +13,7 @@ OUT = ROOT / "docs/assets/cat-focus-calendar/publish-3x4"
 ART = ROOT / "assets/images/pixel-clock"
 
 PAPER = "#F5F0E3"
-POMO_CREAM = "#F7F3E7"
+POMO_CREAM = "#F5F0E3"
 INK = "#17263A"
 GREEN = "#506A4D"
 GREEN_DARK = "#304B38"
@@ -23,7 +23,7 @@ TOMATO = "#E23B32"
 TOMATO_DARK = "#BE2D2A"
 LEAF = "#7CB342"
 STEM = "#6B4423"
-MUTED = "#7C7A70"
+MUTED = "#656457"
 SHADOW = "#D8CDB6"
 SUN = "#EFD8A4"
 CLOUD = "#C8C2B4"
@@ -100,8 +100,8 @@ def colon(draw: ImageDraw.ImageDraw, x: int, y: int, scale: int, fill: str = INK
 
 
 def status_icons(draw: ImageDraw.ImageDraw, background: str) -> None:
-    for x, y, w, h in ((186, 7, 3, 3), (191, 5, 3, 3), (196, 5, 3, 3), (201, 7, 3, 3),
-                       (189, 11, 12, 4), (191, 14, 8, 3)):
+    for x, y, w, h in ((180, 6, 23, 2), (180, 8, 3, 3), (200, 8, 3, 3),
+                       (185, 11, 13, 2), (189, 16, 5, 3)):
         rect(draw, x, y, w, h, GREEN)
     rect(draw, 207, 10, 28, 14, INK)
     rect(draw, 211, 13, 20, 8, background)
@@ -110,94 +110,15 @@ def status_icons(draw: ImageDraw.ImageDraw, background: str) -> None:
         rect(draw, x, 15, 5, 4, GREEN)
 
 
-def nav_icon(draw: ImageDraw.ImageDraw, x: int, kind: str, y: int = 286) -> None:
-    if kind == "up":
-        for i in range(8):
-            yy = y + 9 + i
-            spread = 1 + i * 2
-            rect(draw, x + 36 - spread - 2, yy, 6, 3, PAPER)
-            rect(draw, x + 36 + spread - 4, yy, 6, 3, PAPER)
-    elif kind == "down":
-        for i in range(8):
-            yy = y + 11 + i
-            spread = 1 + (7 - i) * 2
-            rect(draw, x + 36 - spread - 2, yy, 6, 3, PAPER)
-            rect(draw, x + 36 + spread - 4, yy, 6, 3, PAPER)
-    elif kind == "ok":
-        rect(draw, x + 24, y + 6, 24, 16, PAPER)
-        rect(draw, x + 27, y + 9, 18, 10, INK)
-        rect(draw, x + 30, y + 13, 4, 4, PAPER)
-        rect(draw, x + 34, y + 15, 8, 4, PAPER)
-        rect(draw, x + 40, y + 9, 4, 8, PAPER)
-    elif kind == "pomo":
-        rect(draw, x + 31, y + 8, 10, 2, TOMATO)
-        rect(draw, x + 28, y + 10, 16, 3, TOMATO)
-        rect(draw, x + 26, y + 13, 20, 3, TOMATO)
-        rect(draw, x + 25, y + 16, 22, 6, TOMATO)
-        rect(draw, x + 26, y + 22, 20, 2, TOMATO)
-        rect(draw, x + 28, y + 24, 16, 2, TOMATO)
-        rect(draw, x + 31, y + 26, 10, 1, TOMATO)
-        rect(draw, x + 40, y + 13, 6, 10, TOMATO_DARK)
-        rect(draw, x + 42, y + 15, 4, 7, TOMATO_DARK)
-        rect(draw, x + 29, y + 13, 4, 4, PAPER)
-        rect(draw, x + 30, y + 14, 2, 2, PAPER)
-        rect(draw, x + 21, y + 7, 7, 3, LEAF)
-        rect(draw, x + 19, y + 8, 4, 2, LEAF)
-        rect(draw, x + 26, y + 3, 5, 5, LEAF)
-        rect(draw, x + 27, y + 1, 3, 3, LEAF)
-        rect(draw, x + 33, y + 2, 6, 6, LEAF)
-        rect(draw, x + 34, y + 1, 4, 2, LEAF)
-        rect(draw, x + 41, y + 3, 5, 5, LEAF)
-        rect(draw, x + 42, y + 1, 3, 3, LEAF)
-        rect(draw, x + 44, y + 7, 7, 3, LEAF)
-        rect(draw, x + 49, y + 8, 4, 2, LEAF)
-        rect(draw, x + 35, y + 0, 2, 5, STEM)
-        rect(draw, x + 36, y + 1, 2, 3, STEM)
-    elif kind == "pause":
-        rect(draw, x + 28, y + 6, 6, 16, PAPER)
-        rect(draw, x + 38, y + 6, 6, 16, PAPER)
-
-
-def nav(draw: ImageDraw.ImageDraw, kinds: tuple[str, str, str]) -> None:
-    rect(draw, 14, 278, 212, 2, SHADOW)
-    for x, kind in zip((8, 84, 160), kinds):
-        rect(draw, x, 286, 72, 28, INK)
-        nav_icon(draw, x, kind)
-
-
-def compact_nav_icon(draw: ImageDraw.ImageDraw, x: int, kind: str, ox: int) -> None:
-    y = 286
-    cx = x + ox + 8
-    if kind == "up":
-        for i in range(4):
-            yy = y + 9 + i
-            spread = i * 2
-            rect(draw, cx - 2 - spread, yy, 4, 2, PAPER)
-            rect(draw, cx - 2 + spread, yy, 4, 2, PAPER)
-    elif kind == "down":
-        for i in range(4):
-            yy = y + 11 + i
-            spread = (3 - i) * 2
-            rect(draw, cx - 2 - spread, yy, 4, 2, PAPER)
-            rect(draw, cx - 2 + spread, yy, 4, 2, PAPER)
-    else:
-        for i in range(6):
-            xx = x + ox + 2 + i
-            spread = 1 + i
-            rect(draw, xx, y + 12 - spread, 2, 4, PAPER)
-            rect(draw, xx, y + 12 + spread - 1, 2, 4, PAPER)
+def nav(draw: ImageDraw.ImageDraw, captions: tuple[str, str, str]) -> None:
+    rect(draw, 14, 278, 212, 1, SHADOW)
+    for x, caption in zip((8, 84, 160), captions):
+        draw.rounded_rectangle((x, 286, x + 71, 313), radius=3, fill=INK if caption else SHADOW)
+        label(draw, (x, 292, 72, 18), caption, PAPER, 13)
 
 
 def nav_zh(draw: ImageDraw.ImageDraw) -> None:
-    rect(draw, 14, 278, 212, 2, SHADOW)
-    icon_w, gap = 16, 6
-    for x, kind, caption in zip((8, 84, 160), ("up", "down", "back"), ("前一天", "后一天", "返回")):
-        rect(draw, x, 286, 72, 28, INK)
-        text_w = len(caption) * 13
-        group = icon_w + gap + text_w
-        start = max(2, (72 - group) // 2)
-        compact_nav_icon(draw, x, kind, start)
-        label(draw, (x + start + icon_w + gap, 293, text_w, 16), caption, PAPER, 13, align="left")
+    nav(draw, ("前一天", "后一天", "返回"))
 
 
 def calendar_sun(draw: ImageDraw.ImageDraw) -> None:
@@ -294,8 +215,9 @@ def calendar_screen(year: int = 2026, month: int = 9, selected: int = 7) -> Imag
     label(draw, (8, 38, 224, 22), f"{summary}{' ' + term if term else ''}", INK, 16, align="left")
 
     calendar_sun(draw)
-    image.paste(Image.open(ART / "calendar-mountain.png").convert("RGB"), (118, 250))
-    image.paste(Image.open(ART / "calendar-cat.png").convert("RGB"), (159, 236))
+    if weekday_sunday_first(year, month, 1) + monthrange(year, month)[1] <= 35:
+        image.paste(Image.open(ART / "calendar-mountain.png").convert("RGB"), (118, 250))
+        image.paste(Image.open(ART / "calendar-cat.png").convert("RGB"), (159, 236))
 
     for index, value in enumerate("日一二三四五六"):
         label(draw, (10 + index * 31, 60, 28, 20), value,
@@ -317,7 +239,8 @@ def calendar_screen(year: int = 2026, month: int = 9, selected: int = 7) -> Imag
         lunar_color = PAPER if selected_now else MUTED
         label(draw, (x, y + 1, 29, 16), str(day), day_color, 14, mono=True)
         label(draw, (x, y + 15, 29, 14), lunar_cell(year, month, day), lunar_color, 11)
-    nav(draw, ("up", "down", "pomo"))
+    label(draw, (0, 258, 240, 18), "长按 OK 时钟 / 上键撕历", MUTED, 13)
+    nav(draw, ("上月", "下月", "专注"))
     return image
 
 
@@ -476,7 +399,8 @@ def pomodoro_screen() -> Image.Image:
     draw = ImageDraw.Draw(image)
     status_icons(draw, POMO_CREAM)
     label(draw, (0, 12, 240, 26), "专注中", GREEN_DARK, 16)
-    label(draw, (0, 41, 240, 22), "第 1 / 4 轮", MUTED, 16)
+    label(draw, (0, 41, 240, 22), "第 1 / 4 轮", MUTED, 13)
+    label(draw, (0, 64, 240, 18), "返回后仍继续计时", MUTED, 13)
     digit(draw, 12, 89, 8, 2)
     digit(draw, 57, 89, 8, 4)
     colon(draw, 102, 89, 8)
@@ -484,7 +408,7 @@ def pomodoro_screen() -> Image.Image:
     digit(draw, 185, 89, 8, 9)
     scene = parse_rgb565(ROOT / "main/assets/folotoy_pomodoro_scene_focus.c", 230, 107)
     image.paste(scene, (5, 168))
-    nav(draw, ("up", "down", "pause"))
+    nav(draw, ("", "返回", "暂停"))
     return image
 
 

@@ -16,7 +16,7 @@ void clock_time_build_date(int *year, int *month, int *day);
 /** Persist current wall clock after SNTP succeeds. */
 void clock_time_on_sntp_sync(void);
 
-/** True until we have ever saved an NTP time (NVS) or synced this boot. */
+/** True until time is explicitly set or synchronized this boot. */
 bool clock_time_needs_sync_hint(void);
 
 /** Consume one-shot "time just synced" edge for UI refresh. */
@@ -26,9 +26,8 @@ bool clock_time_take_sync_event(void);
 bool clock_time_read_today(int *year, int *month, int *day);
 
 /**
- * Wall time is trusted for the always-on clock page when we have an NVS-saved
- * NTP sample and/or a session sync, and localtime looks valid. Compile __DATE__
- * alone is never trusted.
+ * Wall time is trusted after a session sync or explicit setting, with valid
+ * localtime. A saved NVS sample cannot account for time spent powered off.
  */
 bool clock_time_wall_trusted(void);
 

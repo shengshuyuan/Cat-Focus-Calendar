@@ -17,7 +17,7 @@ INK = (23, 38, 58)
 GREEN = (80, 106, 77)
 GREEN_DARK = (48, 75, 56)
 RUST = (182, 91, 63)
-MUTED = (124, 122, 112)
+MUTED = (101, 100, 87)
 NAV = (23, 38, 58)
 
 MONTHS = ["", "正月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "冬月", "腊月"]
@@ -111,11 +111,9 @@ def parse_rgb565(path):
     return img
 
 def status_icons(draw, bg):
-    # battery/wifi as simple ink on whatever bg
-    draw.rectangle((174, 12, 177, 15), fill=GREEN)
-    draw.rectangle((180, 9, 183, 12), fill=GREEN)
-    draw.rectangle((186, 12, 189, 15), fill=GREEN)
-    draw.rectangle((180, 16, 183, 19), fill=GREEN)
+    for x, y, w, h in ((180, 6, 23, 2), (180, 8, 3, 3), (200, 8, 3, 3),
+                       (185, 11, 13, 2), (189, 16, 5, 3)):
+        draw.rectangle((x, y, x + w - 1, y + h - 1), fill=GREEN)
     draw.rectangle((207, 10, 234, 23), fill=INK)
     draw.rectangle((211, 13, 230, 20), fill=bg)
     draw.rectangle((235, 14, 237, 19), fill=INK)
@@ -123,8 +121,12 @@ def status_icons(draw, bg):
     draw.rectangle((219, 15, 223, 18), fill=GREEN)
     draw.rectangle((225, 15, 229, 18), fill=GREEN)
 
-def nav(draw):
-    draw.rectangle((0, 292, 239, 319), fill=NAV)
+def nav(draw, captions=("上月", "下月", "专注")):
+    draw.rectangle((14, 278, 225, 278), fill=(216, 207, 185))
+    for x, caption in zip((8, 84, 160), captions):
+        draw.rounded_rectangle((x, 286, x + 71, 313), radius=3,
+                               fill=NAV if caption else (216, 207, 185))
+        draw.text((x + 36, 300), caption, font=font(13), fill=PAPER, anchor="mm")
 
 def render_calendar(y, m, d, name):
     img = Image.new("RGB", (W, H), PAPER)
@@ -161,6 +163,7 @@ def render_calendar(y, m, d, name):
         lc = PAPER if selected else MUTED
         draw.text((x + 4, cy + 1), str(day), font=font(14), fill=dc)
         draw.text((x + 1, cy + 14), cap, font=font(11), fill=lc)
+    draw.text((120, 267), "长按 OK 时钟 / 上键撕历", font=font(13), fill=MUTED, anchor="mm")
     img.save(OUT / name)
     print("wrote", name, lunar)
 
@@ -169,11 +172,17 @@ def render_pomo(theme, pose, name):
     img = Image.new("RGB", (W, H), bg)
     draw = ImageDraw.Draw(img)
     status_icons(draw, bg)
-    nav(draw)
-    label = "专注中" if pose == "focus" else "休息中"
-    draw.text((120, 24), label, font=font(16), fill=GREEN_DARK, anchor="mm")
-    draw.text((120, 52), "第 1 / 4 轮", font=font(16), fill=MUTED, anchor="mm")
-    draw.text((120, 120), "25 : 00", font=font(28), fill=INK, anchor="mm")
+    from render_readme_previews import digit, colon
+    focus = pose == "focus"
+    nav(draw, ("", "返回", "暂停") if focus else ("时长", "返回", "开始"))
+    label = "专注中" if focus else "准备专注"
+    draw.text((120, 25), label, font=font(16), fill=GREEN_DARK, anchor="mm")
+    draw.text((120, 52), "第 1 / 4 轮", font=font(13), fill=MUTED, anchor="mm")
+    hint = "返回后仍继续计时" if focus else "长按上换猫 / 长按下静音"
+    draw.text((120, 73), hint, font=font(13), fill=MUTED, anchor="mm")
+    for x, value in ((12, 2), (57, 5), (140, 0), (185, 0)):
+        digit(draw, x, 89, 8, value)
+    colon(draw, 102, 89, 8)
     scene = parse_rgb565(ROOT / "main/assets" / THEMES[theme][pose])
     img.paste(scene, (5, 168))
     img.save(OUT / name)
@@ -181,6 +190,7 @@ def render_pomo(theme, pose, name):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
+    render_calendar(2026, 8, 31, "calendar_2026-08_six_rows.png")
     render_calendar(2026, 9, 11, "calendar_2026-09-11.png")
     render_calendar(2026, 9, 7, "calendar_2026-09-07_bailu.png")
     render_calendar(2026, 10, 1, "calendar_2026-10-01.png")

@@ -147,7 +147,10 @@ bool pomodoro_model_confirm_abandon(pomodoro_model_t *model) {
 }
 
 bool pomodoro_model_start_break(pomodoro_model_t *model, uint64_t now_ms) {
-    if (!model || model->state != POMODORO_BREAK_PROMPT) return false;
+    if (!model || (model->state != POMODORO_BREAK_PROMPT &&
+                   model->state != POMODORO_REWARD)) return false;
+    model->reward_pending = false;
+    model->reward_deadline_ms = 0;
     if (model->pending_break_min != 5 && model->pending_break_min != 15) {
         model->pending_break_min = 5;
     }

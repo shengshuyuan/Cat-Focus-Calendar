@@ -14,7 +14,8 @@ This branch implements the first visual and interaction slice for the FoloToy AI
 - Long-press `UP` from the calendar to open the Chinese tear-off-style daily page. It shares the calendar's selected date, shows weekday, lunar date, solar term, ganzhi, and personal focus suggestions; `UP` and `DOWN` move one day backward and forward, while `OK` returns to the calendar. Its suggestions are not an authoritative traditional almanac.
 - The calendar has an offline lunar-month and 24-solar-term table covering 1900–2100, so its lunar information does not depend on Wi-Fi.
 - Pomodoro starts at 25 minutes. In the idle state, `UP` cycles 15, 25, and 45 minutes; `DOWN` returns to the calendar without pausing an active timer. `OK` starts, pauses, resumes, or starts the prompted break.
-- A long `OK` returns from Pomodoro to the calendar.
+- A long `OK` returns from Pomodoro to the calendar. Long `UP` changes cat skin; long `DOWN` toggles chimes. Pause focus then press `UP` to request ending the round (`DOWN` cancels, `OK` confirms). At a break prompt, `UP` skips the break.
+- Calendar long `OK` opens the always-on clock. It displays real date, weekday and `HH:mm` only after synchronization or explicit setting this boot; restored NVS time stays untrusted.
 - A long `DOWN` from the calendar opens the Wi-Fi provisioning page. The device starts a SoftAP portal at `http://192.168.4.1`; the phone joins that hotspot, submits 2.4 GHz credentials, and NTP corrects the device clock.
 - Pomodoro state and completed-session counters use the reference NVS store and recover running work as paused after restart.
 - A small generated LVGL font contains the Chinese glyphs used by these screens. The font source is LXGW WenKai Medium installed locally during development; only the generated C glyph table is tracked.

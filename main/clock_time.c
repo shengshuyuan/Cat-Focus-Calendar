@@ -49,8 +49,6 @@ static void parse_build_date(int *year, int *month, int *day)
     *day = 11;
 }
 
-bool clock_time_set_local(int year, int month, int day, int hour, int minute, int second);
-
 void clock_time_bootstrap(void)
 {
     setenv("TZ", "CST-8", 1);
@@ -79,22 +77,6 @@ void clock_time_bootstrap(void)
     } else if (time_looks_valid(&local)) {
         ESP_LOGI(TAG, "RTC already valid (nvs=%d)", (int)have_nvs);
     }
-
-    /* If wall clock is untrusted or stuck before 2026-09-17, seed today. */
-    bool need_seed = !time_looks_valid(&local);
-    if (!need_seed) {
-        int y = local.tm_year + 1900;
-        int m = local.tm_mon + 1;
-        int d = local.tm_mday;
-        if (y < 2026 || (y == 2026 && m < 9) || (y == 2026 && m == 9 && d < 17)) {
-            need_seed = true;
-        }
-    }
-    if (need_seed) {
-        if (clock_time_set_local(2026, 9, 17, 18, 23, 19)) {
-            ESP_LOGI(TAG, "seeded wall clock to 2026-09-17");
-        }
-    }
 }
 
 void clock_time_on_sntp_sync(void)
@@ -117,8 +99,7 @@ void clock_time_on_sntp_sync(void)
 
 bool clock_time_needs_sync_hint(void)
 {
-    /* Hint only when we have never successfully NTP-saved a time. */
-    return !s_have_saved_time && !s_synced_this_boot;
+    return !s_synced_this_boot;
 }
 
 bool clock_time_take_sync_event(void)
@@ -181,7 +162,7 @@ clock_time_trust_t clock_time_trust(void)
 
 bool clock_time_wall_trusted(void)
 {
-    if (!s_have_saved_time && !s_synced_this_boot) return false;
+    if (!s_synced_this_boot) return false;
     time_t now = time(NULL);
     struct tm local = {0};
     localtime_r(&now, &local);
